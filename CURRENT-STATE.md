@@ -1,15 +1,17 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 durable-backend release candidate
-Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; Google OAuth live acceptance passed; starter Room Model persistence confirmed; first-load Studio reload defect fixed in source; full persistence acceptance still in progress; not production-promoted.**
+Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; Google OAuth live acceptance passed; starter Room Model persistence and authenticated Studio rendering confirmed; Studio interaction/visual refinement preview built and READY; full persistence acceptance still in progress; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
-- Canonical `main` head before this auth fix: `b0800d7ba379912f703ec322fab24ae08d4be436`.
-- Active auth-fix branch: `parallax/server-google-oauth`.
+- Canonical `main` head before this auth/refinement work: `b0800d7ba379912f703ec322fab24ae08d4be436`.
+- Active feature branch: `parallax/server-google-oauth`.
 - Server-side OAuth launcher commit: `d1ecfe957dc26a87d8fd965e5d32f75ea7887043`.
 - Runtime public-config fallback implementation is complete through commit `1ccd8c5850408e944a145ad899b4399f21f9ab01`.
 - First-load Studio initialization fix: `242dda443247deba721d8ced1cc79a1e28373f5c`.
+- Studio direct-manipulation refinement: `542921bcbfb0eb77534e92f9124d11ffaeac0589`.
+- Studio visual hierarchy refinement: `b7575b82d183434db8960adefc6f849c2a853f12`.
 - Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
 - Runtime dependencies are pinned and `.env.production` is excluded from source control.
 
@@ -35,34 +37,38 @@ Status: **canonical Git source established on `main`; dedicated Supabase backend
 - No Supabase secret/service-role key is stored in source or exposed to the browser.
 - Email magic-link sign-in remains available as a fallback, but Supabase default SMTP has already hit its development email rate limit and is not considered production-ready mail infrastructure.
 
-### v0.2.2 application state
-- Supabase SSR runtime is wired to the dedicated project using the publishable key only; RLS remains authoritative.
-- Studio exposes sign-out for authenticated sessions.
-- Backend health route checks real Supabase connectivity and anonymous RLS non-disclosure.
-- Canonical Room Model, Organize / Arrange / Build Studio, geometry/build gating, private Storage capture, planning persistence and measurement verification remain intact.
-
-### Current corrected auth preview
-- Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`)
-- Preview deployment: `dpl_Gav7vNFJieWRmC523TAzb7y3yXDZ`
-- Preview URL: `https://nestmetric-i4odlsfje-lew7.vercel.app`
-- State: `READY`
-- Inline preview package contains the current approved feature-branch runtime plus a deployment-only `vercel.json` framework override for Next.js.
-- Vercel detected Next.js `16.3.1`; compilation and TypeScript passed.
-- Built routes include `/auth/google`, `/auth/callback`, `/studio`, and `/api/health/backend`.
-- The prior auth preview `dpl_4naqG1bEAea4CMJ1oS99jRkueYif` returned HTTP 500 on `/auth/google` because Vercel's inline deployment path did not expose project Preview environment variables to the serverless runtime. The shared public-config fallback resolves that runtime failure across browser, server, proxy, Studio and health-check Supabase clients.
-
 ### Authenticated starter persistence acceptance — 2026-08-20
-- Google OAuth completed successfully in the current preview and established an authenticated Supabase session.
+- Google OAuth completed successfully and established an authenticated Supabase session.
 - First authenticated Studio execution inserted all expected starter data successfully: `1` project, `1` room, `3` room objects, `1` room opening, `0` measurements, `0` assets.
-- Supabase API logs show all four starter insert operations returned HTTP `201`.
-- The first Studio render then returned HTTP `500` with `Unable to initialize the Room Model.` despite successful persistence.
-- Root cause: the page performs an empty room GET, writes the starter Room Model, then repeats the same room GET in the same Next.js render. The repeated GET was not sent to Supabase, consistent with same-request fetch memoization/reuse of the first empty result.
-- Source fix `242dda443247deba721d8ced1cc79a1e28373f5c` now creates the starter Room Model and redirects to `/studio`, forcing a fresh request to load the persisted data.
-- Existing persisted starter data means the already-authenticated preview should render Studio successfully on Reload even before a new preview containing the source fix is built.
-- Remaining acceptance: confirm Studio renders after reload, then verify object movement persistence, real measurement persistence, private asset upload, and sign-out/sign-in persistence.
+- Supabase API logs show all starter insert operations returned HTTP `201`.
+- The original first Studio render returned HTTP `500` with `Unable to initialize the Room Model.` despite successful persistence.
+- Root cause: the page performed an empty room GET, wrote the starter Room Model, then repeated the same room GET in the same Next.js render. The repeated GET was not sent to Supabase, consistent with same-request fetch memoization/reuse of the first empty result.
+- Source fix `242dda443247deba721d8ced1cc79a1e28373f5c` now creates the starter Room Model and redirects to `/studio`, forcing a fresh request to load persisted data.
+- Live browser reload subsequently rendered the authenticated `Main room` Studio successfully using the durable Supabase-backed Room Model.
+
+### Studio interaction and visual refinement
+- Dragging now preserves the exact pointer grab offset; movable objects no longer jump to their center when picked up.
+- Pointer motion is continuous and unsnapped while dragging. The 50 mm grid is applied only on release.
+- Movement is clamped to room bounds during drag; fixed/opening conflicts are previewed contextually.
+- Invalid releases revert to the original persisted position instead of silently stopping mid-drag.
+- Valid releases perform deterministic placement validation and persist exactly the final snapped coordinates once.
+- The room canvas preserves the Room Model's physical aspect ratio instead of independently stretching X/Y geometry.
+- Visual states now distinguish selected, fixed, dragging and invalid placement; the dragging object receives lift/grab feedback.
+- Capture and Measurements moved behind progressive disclosure; object list and inspector are visually quieter so the floor plan is the primary working surface.
+- Stale status/conflict messages clear when selection or workspace mode changes.
+
+### Current Studio-refinement preview
+- Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`)
+- Preview deployment: `dpl_E7zgQ1SEdpoiw8ngGm6RpmA7phGE`
+- Preview URL: `https://nestmetric-g2t2m5xrm-lew7.vercel.app`
+- State: `READY`
+- Preview was built from the exact approved feature-branch runtime using a 29-file inline package plus a Next.js framework override; production aliases were not changed.
+- Vercel detected Next.js `16.3.1`; compile and TypeScript completed successfully.
+- Built routes include `/auth/google`, `/auth/callback`, `/studio`, and `/api/health/backend`.
+- Live UX acceptance of the refined drag feel and layout is still pending user evaluation.
 
 ### Production state
-The existing NestMetric production alias remains on the previously verified release. v0.2.2 will not be production-promoted until full authenticated persistence acceptance proves account/session, project/room persistence, object movement, measurement persistence, and private asset storage against Supabase.
+The existing NestMetric production alias remains on the previously verified release. v0.2.2 will not be production-promoted until full authenticated persistence acceptance proves account/session, project/room persistence, object movement, measurement persistence, and private asset storage against Supabase, and the refined Studio interaction receives live acceptance.
 
 ### Known external constraints
 - Vercel project-level framework configuration still reports `framework: null`; previews explicitly supply a Next.js framework override. This should be normalized before routine production releases.
