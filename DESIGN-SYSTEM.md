@@ -22,14 +22,15 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 
 ## Photo viewport and gestures
 - Pinch zoom is a first-class interaction on touch devices. The supported viewport scale is `1x..5x`; zoom is centered on the live pinch midpoint so the content under the user's fingers remains stable.
+- On iOS/Safari, pinch handling must use native non-passive touch listeners when Pointer Events do not reliably preserve multi-touch delivery. This is an implementation compatibility layer, not a separate interaction model.
 - Double-tapping empty photo space toggles between `1x` and approximately `2.5x`; returning to `1x` recenters the photograph.
 - At zoom levels above `1x`, one-finger movement on empty photo space pans the viewport. One-finger movement beginning on a recognized movable object manipulates that object instead.
 - Two fingers always own viewport zoom/pan. If a second finger appears during an object drag, the object move is cancelled/reverted and the viewport gesture takes precedence.
 - Zoom/pan is visual navigation only. It must never modify normalized scene coordinates, support relationships, collision footprints, gravity, measurement evidence, or persisted object placement.
-- Pointer coordinates must be inverse-transformed from the current viewport before object manipulation and scene physics are evaluated.
+- Pointer/touch coordinates must be inverse-transformed from the current viewport before object manipulation and scene physics are evaluated.
 - Small segmented objects should expose a minimum 44px invisible hit target without changing their visible outline, scale, collision footprint, or photographic appearance.
 - The manipulation canvas suppresses Safari/native image callouts and browser gesture ownership. NestMetric owns pinch, pan, object drag, and double-tap inside that canvas.
-- A lightweight zoom indicator/reset control may appear only while zoomed; it should not permanently compete with the photograph.
+- A compact `− / scale / +` zoom control remains available on the photo surface as a reliable fallback for touch-device gesture inconsistencies. Reset appears while zoomed. These controls must remain secondary to the photograph while meeting 44px touch-target requirements.
 
 ## Direct manipulation in Photo
 - Direct manipulation happens on the original calibrated room photo. Generated visual proposals remain view-only unless they receive their own explicit calibration contract later.
