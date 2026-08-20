@@ -96,12 +96,12 @@ function maskSvg(
       const y = source.top + point.y * source.height - target.top;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
-    return `<polygon points="${points}" fill="white" stroke="white" stroke-width="${options.stroke}" stroke-linejoin="round"/>`;
+    return `<polygon points=\"${points}\" fill=\"white\" stroke=\"white\" stroke-width=\"${options.stroke}\" stroke-linejoin=\"round\"/>`;
   }).join('');
   return Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${target.width}" height="${target.height}" viewBox="0 0 ${target.width} ${target.height}">` +
-    `<defs><filter id="edge"><feGaussianBlur stdDeviation="${options.feather}"/></filter></defs>` +
-    `<g filter="url(#edge)">${polygons}</g></svg>`,
+    `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${target.width}\" height=\"${target.height}\" viewBox=\"0 0 ${target.width} ${target.height}\">` +
+    `<defs><filter id=\"edge\"><feGaussianBlur stdDeviation=\"${options.feather}\"/></filter></defs>` +
+    `<g filter=\"url(#edge)\">${polygons}</g></svg>`,
   );
 }
 
@@ -143,15 +143,16 @@ async function localizedBackground(source: PreparedSource, item: PhotoSceneItem)
     const result = await generateImage({
       model,
       prompt: { text: prompt, images: [new Uint8Array(patch)] },
-      providerOptions: { openai: { quality: 'high' } },
-      maxRetries: 1,
-      abortSignal: AbortSignal.timeout(95_000),
+      providerOptions: { openai: { quality: 'medium' } },
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(105_000),
     });
     generatedBytes = result.image.uint8Array;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Background preparation failed.';
     console.error('NESTMETRIC_BACKGROUND_PREPARATION_FAILED', {
       model,
+      quality: 'medium',
       patchWidth: patchRect.width,
       patchHeight: patchRect.height,
       errorName: error instanceof Error ? error.name : 'UnknownError',
