@@ -20,6 +20,17 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - Visual Proposals are explicitly **view-only** unless and until they receive their own calibration contract. The UI must say this directly rather than relying on the user to infer it.
 - When a proposal is active, the photo surface must direct the user back to **Original** for direct manipulation.
 
+## Photo viewport and gestures
+- Pinch zoom is a first-class interaction on touch devices. The supported viewport scale is `1x..5x`; zoom is centered on the live pinch midpoint so the content under the user's fingers remains stable.
+- Double-tapping empty photo space toggles between `1x` and approximately `2.5x`; returning to `1x` recenters the photograph.
+- At zoom levels above `1x`, one-finger movement on empty photo space pans the viewport. One-finger movement beginning on a recognized movable object manipulates that object instead.
+- Two fingers always own viewport zoom/pan. If a second finger appears during an object drag, the object move is cancelled/reverted and the viewport gesture takes precedence.
+- Zoom/pan is visual navigation only. It must never modify normalized scene coordinates, support relationships, collision footprints, gravity, measurement evidence, or persisted object placement.
+- Pointer coordinates must be inverse-transformed from the current viewport before object manipulation and scene physics are evaluated.
+- Small segmented objects should expose a minimum 44px invisible hit target without changing their visible outline, scale, collision footprint, or photographic appearance.
+- The manipulation canvas suppresses Safari/native image callouts and browser gesture ownership. NestMetric owns pinch, pan, object drag, and double-tap inside that canvas.
+- A lightweight zoom indicator/reset control may appear only while zoomed; it should not permanently compete with the photograph.
+
 ## Direct manipulation in Photo
 - Direct manipulation happens on the original calibrated room photo. Generated visual proposals remain view-only unless they receive their own explicit calibration contract later.
 - The live drag representation must preserve the photographed object's original pixels. AI-generated object recreations are not acceptable as the primary manipulation layer because they can change identity, texture, leaves, edges, lighting, or shape.
