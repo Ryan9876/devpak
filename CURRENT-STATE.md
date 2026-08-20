@@ -1,13 +1,14 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 durable-backend release candidate
-Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; Google OAuth provider configured; server-side OAuth launcher preview built and READY; authenticated persistence acceptance still pending; not production-promoted.**
+Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; Google OAuth provider configured; corrected server-side OAuth/runtime-config preview built and READY; authenticated persistence acceptance still pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
 - Canonical `main` head before this auth fix: `b0800d7ba379912f703ec322fab24ae08d4be436`.
 - Active auth-fix branch: `parallax/server-google-oauth`.
-- Runtime auth-fix commit: `d1ecfe957dc26a87d8fd965e5d32f75ea7887043`.
+- Server-side OAuth launcher commit: `d1ecfe957dc26a87d8fd965e5d32f75ea7887043`.
+- Runtime public-config fallback implementation is complete through commit `1ccd8c5850408e944a145ad899b4399f21f9ab01`.
 - Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
 - Runtime dependencies are pinned and `.env.production` is excluded from source control.
 
@@ -23,13 +24,14 @@ Status: **canonical Git source established on `main`; dedicated Supabase backend
 - Supabase security advisor: no findings after migration.
 - Foreign-key index findings were repaired; remaining unused-index notices are expected on the empty new database.
 
-### Authentication state
+### Authentication and runtime configuration
 - Supabase Google provider is configured with the dedicated NestMetric Google Cloud OAuth client.
-- Google OAuth initiation is now server-side at `/auth/google`; the route uses the Supabase SSR client, generates the PKCE flow, and redirects to the provider.
+- Google OAuth initiation is server-side at `/auth/google`; the route uses the Supabase SSR client, creates the PKCE flow, and redirects to the provider.
 - `/auth/callback` exchanges an OAuth code for the authenticated session and redirects to `/studio`.
-- The login UI uses ordinary navigation to `/auth/google` instead of starting OAuth from browser-side Supabase JavaScript, removing the prior permanent `Opening Google sign-in…` failure mode.
+- The login UI uses ordinary navigation to `/auth/google`; Google sign-in defaults enabled for this configured project and can be explicitly disabled with `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=false`.
+- Supabase clients use one shared runtime configuration module. Vercel environment variables override the dedicated NestMetric Supabase URL/publishable key; if an inline preview does not receive those runtime variables, the source contains safe project-specific fallbacks for the public URL and publishable key only.
+- No Supabase secret/service-role key is stored in source or exposed to the browser.
 - Email magic-link sign-in remains available as a fallback, but Supabase default SMTP has already hit its development email rate limit and is not considered production-ready mail infrastructure.
-- Preview environment contains `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`.
 
 ### v0.2.2 application state
 - Supabase SSR runtime is wired to the dedicated project using the publishable key only; RLS remains authoritative.
@@ -37,21 +39,23 @@ Status: **canonical Git source established on `main`; dedicated Supabase backend
 - Backend health route checks real Supabase connectivity and anonymous RLS non-disclosure.
 - Canonical Room Model, Organize / Arrange / Build Studio, geometry/build gating, private Storage capture, planning persistence and measurement verification remain intact.
 
-### Current auth-fix preview
+### Current corrected auth preview
 - Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`)
-- Preview deployment: `dpl_4naqG1bEAea4CMJ1oS99jRkueYif`
-- Preview URL: `https://nestmetric-rdm3zmwoe-lew7.vercel.app`
+- Preview deployment: `dpl_Gav7vNFJieWRmC523TAzb7y3yXDZ`
+- Preview URL: `https://nestmetric-i4odlsfje-lew7.vercel.app`
 - State: `READY`
-- Build input was the approved feature-branch runtime at commit `d1ecfe957dc26a87d8fd965e5d32f75ea7887043`, plus a deployment-only `vercel.json` framework override for Next.js.
+- Inline preview package contains the current approved feature-branch runtime plus a deployment-only `vercel.json` framework override for Next.js.
 - Vercel detected Next.js `16.3.1`; compilation and TypeScript passed.
-- Built routes include `/auth/google`, `/auth/callback`, `/studio`, and the backend health route.
-- Vercel Deployment Protection prevents the connector from executing `/auth/google` without a browser-established preview access cookie. Therefore live Google redirect/session acceptance is still pending and must not be inferred from the READY build alone.
+- Built routes include `/auth/google`, `/auth/callback`, `/studio`, and `/api/health/backend`.
+- The prior auth preview `dpl_4naqG1bEAea4CMJ1oS99jRkueYif` returned HTTP 500 on `/auth/google` because Vercel's inline deployment path did not expose project Preview environment variables to the serverless runtime. The shared public-config fallback resolves that specific runtime failure across browser, server, proxy, Studio and health-check Supabase clients.
+- Vercel Deployment Protection prevents the connector from executing protected routes without a browser-established preview access cookie. Therefore live Google redirect/session acceptance is still pending and must not be inferred from the READY build alone.
 
 ### Production state
 The existing NestMetric production alias remains on the previously verified release. v0.2.2 will not be production-promoted until a real authenticated persistence acceptance check proves account/session, project/room persistence, object movement, measurement persistence, and private asset storage against Supabase.
 
 ### Known external constraints
-- Vercel project-level framework configuration still reports `framework: null`; auth-fix previews explicitly supply a Next.js framework override. This should be normalized before routine production releases.
+- Vercel project-level framework configuration still reports `framework: null`; previews explicitly supply a Next.js framework override. This should be normalized before routine production releases.
+- The current Vercel connector's inline deployment path does not reliably inherit project runtime environment variables; NestMetric therefore has safe public Supabase defaults while retaining environment overrides.
 - Supabase default SMTP is suitable only for development/testing and has already rate-limited repeated magic-link attempts; production email auth requires custom SMTP if retained.
 
 ## Development workflow normalization — 2026-08-19
