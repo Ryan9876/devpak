@@ -17,6 +17,7 @@
     "src/lib/photo/types.ts",
     "src/lib/photo/placement.ts",
     "src/lib/photo/defaultScene.ts",
-    "src/lib/photo/viewport.ts"
+    "src/lib/photo/viewport.ts",
+    "src/lib/photo/interaction.ts"
   ]
 }
