@@ -1,17 +1,18 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; mobile viewport zoom/pan is build-validated and live use improved; Object Interaction v4 has been live-tested as better for finger selection/zoom/pan; automatic refined-scene preparation repair is build-validated in a READY Preview after correcting the failing background-generation request and client timeout; live derivative creation remains pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; mobile viewport zoom/pan is build-validated and live use improved; Object Interaction v4 has been live-tested as better for finger selection/zoom/pan; the first automatic-refinement repair reached the correct live preparation state but its high-quality localized background generation timed out; a latency-reduced replacement is now build-validated in a READY Preview with live derivative creation pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`.
 - Canonical `main` remains unchanged by this work.
 - Active feature branch: `parallax/object-interaction-v4`, created from `parallax/photo-viewport-zoom-pan`.
-- Current refinement-repair source head validated in Preview: `e23134d55f69451de3f40fdddcefc38c32a50694`.
+- Current refinement-latency source head validated in Preview: `8fe4d57167a3bde3d2119f7de164d9e7c1f098f3`.
 - Background-generation repair commit: `695fc2b505b5ddd6466e7eb8e773a098d746f428`.
 - Refinement-timeout alignment commit: `e23134d55f69451de3f40fdddcefc38c32a50694`.
+- Refinement-latency reduction commit: `8fe4d57167a3bde3d2119f7de164d9e7c1f098f3`.
 - The validated v4 interaction implementation remains preserved byte-for-byte in `src/components/PhotoWorkspaceCore.tsx` with blob SHA `d84b5a4d63761ea45350b54b91f0b89e006319b1`; `src/components/PhotoWorkspace.tsx` remains the preparation controller around that core.
-- Temporary Vercel bootstrap files are deployment-only and are not canonical source artifacts.
+- Temporary Vercel bootstrap/config files are deployment-only and are not canonical source artifacts.
 
 ### Durable product direction — 2026-08-20
 - NestMetric is a **functional photo-augmentation product, not a CAD application**.
@@ -58,7 +59,7 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Live dragging remains browser-side compositing with exact source pixels, deterministic support/collision/gravity, perspective-aware scale, contact shadow, and calibrated foreground occlusion.
 - iOS/Safari native image callouts/context menus are suppressed on the manipulation surface.
 - Visual Proposals are explicitly view-only and direct users back to `Original` for manipulation.
-- Before the repaired automatic-refinement Preview was exercised, Supabase still contained zero `scene_object_cutout` and zero `scene_background_plate` rows for the accepted source photo; only the original source and AI visual proposals existed.
+- Before the latest replacement Preview, Supabase still contained zero `scene_object_cutout` and zero `scene_background_plate` rows for the accepted source photo; only the original source and AI visual proposals existed.
 
 ### Photo viewport zoom/pan
 - Viewport state is `{scale, tx, ty}` with clamped zoom range `1x..5x` and a `2.5x` double-tap target.
@@ -90,32 +91,37 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - The browser then calls the idempotent `/api/ai/photo-scene-assets` route. Existing v3 derivatives are reused; missing derivatives are created once.
 - Successful preparation reloads Studio so refreshed private signed URLs are used by the refined compositor.
 - If preparation genuinely fails, the working v4 fallback remains available and is explicitly labeled **Basic manipulation mode** with a **Retry refinement** action.
-- The previous READY Preview exercised both API routes: `/api/ai/photo-scene-assets/resolve` returned `200`, while `/api/ai/photo-scene-assets` returned `502`; no refined derivative rows were created.
-- Diagnosis isolated the failure to the localized background image-generation call. The repaired route no longer passes a calculated arbitrary `aspectRatio` to GPT Image 2; the generated patch is still deterministically resized to the exact local patch dimensions before masked compositing.
-- Structured server logging now emits `NESTMETRIC_BACKGROUND_PREPARATION_FAILED` with model, patch dimensions, error name and message if provider generation fails again.
-- The browser preparation timeout is now `115,000 ms`, aligned with the route's `95,000 ms` provider abort and `120 s` Vercel function ceiling instead of the previous premature `35,000 ms` cutoff.
-- Live authenticated derivative creation is still pending; build success does not yet prove the current room's exact cutout/background assets are generated.
+- Live iPhone exercise of Preview `dpl_6xsnU7M6BR7tgrKz5pFn2U4BJiQe` confirmed the correct UI state: `Original` selected, v4 direct manipulation active, and **Improving object edges…** shown while refinement ran.
+- That live request resolved the calibrated source successfully: `/api/ai/photo-scene-assets/resolve` returned `200`.
+- `/api/ai/photo-scene-assets` then returned `502`; structured logs captured `NESTMETRIC_BACKGROUND_PREPARATION_FAILED` for `openai/gpt-image-2`, patch `1092×1017`, with `AbortError: Delay was aborted`.
+- No `scene_background_plate` or `scene_object_cutout` derivative rows were created by that failed attempt.
+- Diagnosis therefore moved from request-shape uncertainty to a confirmed provider-latency failure in the localized high-quality background-generation step.
+- The replacement route uses the same GPT Image 2 path that has already succeeded for NestMetric visual proposals, but requests `quality: 'medium'`, disables SDK retry delay with `maxRetries: 0`, and allows up to `105,000 ms` for the provider call.
+- The browser preparation timeout remains `115,000 ms`, under the route's `120 s` Vercel function ceiling.
+- The localized mask, deterministic patch resize/compositing, source-pixel cutout, support/collision/gravity, and v4 responder interaction model are unchanged.
+- Structured server logging remains enabled so any next failure exposes the provider error instead of collapsing into an opaque fallback state.
+- Live authenticated derivative creation on the latency-reduced Preview is still pending.
 
-### Current refinement-repair Preview — build validated
+### Current refinement-latency Preview — build validated
 - Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`).
-- Deployment: `dpl_6xsnU7M6BR7tgrKz5pFn2U4BJiQe`.
-- URL: `https://nestmetric-muvcxx0p9-lew7.vercel.app`.
+- Deployment: `dpl_DwZVCoRBdedE526heQpsWeqiDhFw`.
+- URL: `https://nestmetric-iiomh9k5d-lew7.vercel.app`.
 - State: `READY`.
 - Preview only; production aliases were not changed.
-- Deployment bootstrapped immutable canonical source commit `e23134d55f69451de3f40fdddcefc38c32a50694`.
-- Bootstrap verification confirmed the aspect-ratio repair, structured refinement logging and `115,000 ms` client timeout before validation.
+- Deployment bootstrapped immutable canonical source commit `8fe4d57167a3bde3d2119f7de164d9e7c1f098f3`.
+- Bootstrap verification confirmed `quality: 'medium'`, `maxRetries: 0`, `AbortSignal.timeout(105_000)`, structured refinement logging, and preserved v4 interaction-core markers before validation.
 - Full validation passed: release structure PASS, strict TypeScript PASS, Room Model schema gate PASS, and domain/interaction tests `10/10` PASS.
 - Next.js `16.3.1` production compilation passed.
 - Built routes include `/api/ai/photo-scene-assets`, `/api/ai/photo-scene-assets/resolve`, `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- Vercel runtime error-cluster scan after deployment found no errors.
-- The inline Preview deployment required an explicit Next.js `projectSettings.framework` override because the long-lived Vercel project still reports `framework: null`; attempts without that override built successfully but failed deployment by inheriting the stale `public` output-directory expectation.
+- The deployment-only bootstrap now explicitly includes devDependencies for validation and uses `vercel.ts` to override the long-lived project's stale framework/output settings with Next.js + `.next`; this produced `Detected Next.js version: 16.3.1`, `Applying modifyConfig from Vercel`, and a READY deployment.
+- Earlier deployment attempts in this pass either failed only after successful application validation because Vercel inherited the stale `public` output-directory setting, or failed bootstrap validation because devDependencies were omitted. Neither was promoted or aliased.
 - Live acceptance criterion remains: open the calibrated `Original`; refinement should create/reuse private `scene_background_plate` and `scene_object_cutout` assets, reload into **Refined manipulation**, and preserve v4 finger/zoom/pan/gravity behavior.
 
 ### Production state
 The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/refinement acceptance and explicit promotion authorization.
 
 ### Known platform constraints
-- Vercel project-level framework configuration still reports `framework: null`; Preview deployments must explicitly supply a Next.js framework override.
+- Vercel project-level framework configuration still reports `framework: null`; Preview deployments require an explicit Next.js framework/config override because the project otherwise inherits a stale `public` output-directory expectation.
 - The Vercel inline deployment path does not reliably inherit project runtime environment variables. Public Supabase project configuration has a safe dedicated-project fallback; AI generation uses Vercel AI Gateway/OIDC rather than an inherited OpenAI provider key.
 - Supabase default SMTP is not production-ready; Google OAuth is the accepted auth path unless custom SMTP is added later.
 - `npm install` previously surfaced one high-severity dependency advisory during Preview validation. The interaction/refinement work did not modify package dependencies, so this remains a separate dependency-audit item.
