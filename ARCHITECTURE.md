@@ -44,6 +44,16 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 - Small photographed objects may expose a minimum 44px invisible interaction target without changing their visible segmentation silhouette, scene footprint, collision geometry, or rendered size.
 - Native image callouts and browser gesture ownership remain suppressed on the manipulation canvas so iOS/Safari does not steal pinch, pan, or drag interactions.
 
+### Object interaction responder layer
+- Object rendering and object hit-testing are separate layers. The visible cutout/crop is non-interactive; each movable object owns a dedicated transparent responder positioned over its photo-space footprint.
+- A movable object's responder claims a one-finger pointer immediately on pointer-down and selects the object at gesture start. The canvas does not search DOM ancestry or heuristically decide which object the user intended to touch.
+- The responder maintains at least a 44px screen-space hit target while remaining centered on the object's visible photo footprint. The minimum target is adjusted inversely with viewport zoom so a 44px target does not grow into an oversized screen-space region at high zoom.
+- Object motion is start-state based: the responder records the object's original bounding box and normalized starting pointer once, then applies normalized pointer delta to that original box. The object is never recentered beneath the pointer and incremental frame drift is avoided.
+- During the gesture only lightweight local scene state changes. Deterministic support/collision feedback can run continuously, but the durable source-photo scene is committed at most once on release.
+- If release is invalid, the object reverts to the recorded original state. If unsupported, the existing deterministic gravity resolver chooses the nearest lower valid support. The responder layer does not replace or weaken NestMetric's support/collision/gravity rules.
+- The photo canvas owns only viewport concerns: two-finger pinch, empty-space pan, double-tap zoom, and explicit zoom controls. Object selection and one-finger object movement are not canvas responsibilities.
+- Native two-finger touch still has precedence over an active object responder on iOS. Starting a pinch cancels/reverts the in-progress object move and transfers ownership to the viewport without persisting the cancelled object state.
+
 ### V3 segmentation-first compositing
 - The live draggable object is derived from the immutable source photo's actual pixels. AI does not recreate the object for live manipulation.
 - Each calibrated movable item may contain one or more `sourceMasks`, normalized to its `sourceBbox`. Multiple masks are composited as a union so separated foliage/pot regions can preserve exact photographed pixels while excluding unrelated room pixels.
