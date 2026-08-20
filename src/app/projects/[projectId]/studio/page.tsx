@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import Studio from '@/components/Studio';
+import BuildPlanner from '@/components/BuildPlanner';
 import { loadProjectRoom } from '@/lib/room-model/repository';
 import { createClient } from '@/lib/supabase/server';
 
@@ -15,5 +16,8 @@ export default async function ProjectStudioPage({ params }: { params: Promise<{ 
   const room = await loadProjectRoom(supabase, ownerId, projectId);
   if (!room) notFound();
 
-  return <Studio initialRoom={room} ownerId={ownerId} />;
+  return <>
+    <Studio initialRoom={room} ownerId={ownerId} />
+    <BuildPlanner room={room} ownerId={ownerId} />
+  </>;
 }
