@@ -14,7 +14,8 @@ type AssetRow = {
 };
 
 function sourcePhoto(asset: AssetRow) {
-  return asset.capture_context?.captureMethod !== 'ai_photo_proposal';
+  const method = String(asset.capture_context?.captureMethod ?? '');
+  return method === 'guided_web_photo' || (!method && !asset.capture_context?.sourceAssetId);
 }
 
 function extensionFor(mediaType: string) {
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     .eq('owner_id', ownerId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
-    .limit(24);
+    .limit(80);
   if (assetError) return NextResponse.json({ error: assetError.message }, { status: 500 });
 
   const source = ((assets ?? []) as AssetRow[]).find(sourcePhoto);
