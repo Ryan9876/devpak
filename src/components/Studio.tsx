@@ -32,6 +32,8 @@ type DragFeedback = {
 type PhotoCaptureContext = {
   captureMethod?: string;
   sourceAssetId?: string;
+  itemId?: string;
+  sceneVersion?: number;
   mode?: WorkspaceMode;
   goal?: string;
   model?: string;
@@ -55,8 +57,31 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+function captureMethod(asset: PhotoAsset) {
+  return String(asset.capture_context?.captureMethod ?? '');
+}
+
 function isPhotoProposal(asset: PhotoAsset) {
-  return asset.capture_context?.captureMethod === 'ai_photo_proposal';
+  return captureMethod(asset) === 'ai_photo_proposal';
+}
+
+function isSourcePhoto(asset: PhotoAsset) {
+  const method = captureMethod(asset);
+  return method === 'guided_web_photo' || (!method && !asset.capture_context?.sourceAssetId);
+}
+
+function isVisiblePhoto(asset: PhotoAsset) {
+  return isSourcePhoto(asset) || isPhotoProposal(asset);
+}
+
+function isSceneBackground(asset: PhotoAsset, sourceAssetId: string) {
+  return captureMethod(asset) === 'scene_background_plate' && String(asset.capture_context?.sourceAssetId ?? '') === sourceAssetId;
+}
+
+function isSceneCutout(asset: PhotoAsset, sourceAssetId: string, itemId: string) {
+  return captureMethod(asset) === 'scene_object_cutout'
+    && String(asset.capture_context?.sourceAssetId ?? '') === sourceAssetId
+    && String(asset.capture_context?.itemId ?? '') === itemId;
 }
 
 function friendlyDate(value: string) {
@@ -89,11 +114,20 @@ export default function Studio({
 
   const selectedObject = room.objects.find((x) => x.id === selected);
   const gate = useMemo(() => buildVerificationGate(room, ['wall width', 'wall depth']), [room]);
-  const sourcePhotos = useMemo(() => photoAssets.filter((asset) => !isPhotoProposal(asset)), [photoAssets]);
+  const sourcePhotos = useMemo(() => photoAssets.filter(isSourcePhoto), [photoAssets]);
   const visualProposals = useMemo(() => photoAssets.filter(isPhotoProposal), [photoAssets]);
   const sourcePhoto = sourcePhotos[0] ?? null;
-  const activePhoto = photoAssets.find((asset) => asset.id === activePhotoId) ?? visualProposals[0] ?? sourcePhoto;
+  const activePhoto = photoAssets.find((asset) => asset.id === activePhotoId && isVisiblePhoto(asset)) ?? visualProposals[0] ?? sourcePhoto;
   const photoScene = sourcePhoto?.capture_context?.scene ?? null;
+  const movablePhotoItem = photoScene?.items.find((item) => item.draggable && !item.fixed) ?? null;
+  const backgroundPlate = sourcePhoto
+    ? photoAssets.find((asset) => isSceneBackground(asset, sourcePhoto.id)) ?? null
+    : null;
+  const cutoutAsset = sourcePhoto && movablePhotoItem
+    ? photoAssets.find((asset) => isSceneCutout(asset, sourcePhoto.id, movablePhotoItem.id)) ?? null
+    : null;
+  const scenePrepared = Boolean(backgroundPlate?.signedUrl && cutoutAsset?.signedUrl);
+  const originalActive = Boolean(sourcePhoto && activePhoto?.id === sourcePhoto.id);
 
   async function refreshRoom() {
     if (demo) return;
@@ -160,7 +194,7 @@ export default function Studio({
       .eq('owner_id', ownerId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(30);
+      .limit(80);
     if (error) {
       setPhotoStatus(error.message);
       return;
@@ -184,9 +218,9 @@ export default function Studio({
     const withUrls: PhotoAsset[] = rows.map((asset, index) => ({ ...asset, signedUrl: signed?.[index]?.signedUrl ?? null }));
     setPhotoAssets(withUrls);
     setActivePhotoId((current) => {
-      if (preferId && withUrls.some((asset) => asset.id === preferId)) return preferId;
-      if (current && withUrls.some((asset) => asset.id === current)) return current;
-      return withUrls.find(isPhotoProposal)?.id ?? withUrls.find((asset) => !isPhotoProposal(asset))?.id ?? '';
+      if (preferId && withUrls.some((asset) => asset.id === preferId && isVisiblePhoto(asset))) return preferId;
+      if (current && withUrls.some((asset) => asset.id === current && isVisiblePhoto(asset))) return current;
+      return withUrls.find(isPhotoProposal)?.id ?? withUrls.find(isSourcePhoto)?.id ?? '';
     });
   }
 
@@ -273,6 +307,37 @@ export default function Studio({
     setPhotoStatus('Room photo saved. This is now the primary visual workspace.');
     await refreshPhotos(asset.id);
     setPhotoBusy(false);
+  }
+
+  async function preparePhotoManipulation() {
+    if (!sourcePhoto || !photoScene || !movablePhotoItem) {
+      setPhotoStatus('A calibrated room photo is required before refining movable objects.');
+      return;
+    }
+    setPhotoBusy(true);
+    setPhotoStatus('Preparing a clean background and transparent plant cutout…');
+    try {
+      const response = await fetch('/api/ai/photo-scene-assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roomId: room.id,
+          sourceAssetId: sourcePhoto.id,
+          itemId: movablePhotoItem.id,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'Unable to prepare direct manipulation.');
+      await refreshPhotos(sourcePhoto.id);
+      setActivePhotoId(sourcePhoto.id);
+      setPhotoStatus(json.reused
+        ? 'Refined plant cutout and clean background are ready.'
+        : 'Plant extracted and source area reconstructed. Dragging now uses the refined photo layer.');
+    } catch (error) {
+      setPhotoStatus(error instanceof Error ? error.message : 'Unable to prepare direct manipulation.');
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   async function generatePhotoProposal() {
@@ -543,11 +608,13 @@ export default function Studio({
                 <div className="photo-workspace">
                   <div className="photo-frame">
                     {activePhoto?.signedUrl ? (
-                      photoScene && sourcePhoto.signedUrl ? (
+                      originalActive && photoScene && sourcePhoto.signedUrl ? (
                         <PhotoWorkspace
-                          baseImageUrl={activePhoto.signedUrl}
-                          cropImageUrl={sourcePhoto.signedUrl}
+                          backgroundImageUrl={scenePrepared ? backgroundPlate!.signedUrl! : sourcePhoto.signedUrl}
+                          sourceImageUrl={sourcePhoto.signedUrl}
+                          objectImageUrls={cutoutAsset?.signedUrl && movablePhotoItem ? { [movablePhotoItem.id]: cutoutAsset.signedUrl } : {}}
                           scene={photoScene}
+                          refined={scenePrepared}
                           disabled={photoBusy}
                           onSceneChanged={persistPhotoScene}
                           onStatus={setPhotoStatus}
@@ -670,10 +737,26 @@ export default function Studio({
                 <p className="concept-note">Visual proposals edit the room photo. They do not change saved measurements, object coordinates, or build-readiness evidence.</p>
               </div>
 
-              {photoScene && (
+              {photoScene && !scenePrepared && (
+                <div className="refinement-card">
+                  <b>Make object movement realistic</b>
+                  <p>Extract the plant and reconstruct the dresser once. Support, collisions, and gravity remain deterministic underneath.</p>
+                  <button className="button secondary" onClick={preparePhotoManipulation} disabled={photoBusy || !originalActive}>
+                    {photoBusy ? 'Preparing…' : 'Refine plant manipulation'}
+                  </button>
+                </div>
+              )}
+
+              {photoScene && scenePrepared && (
                 <div className="status-card success">
-                  <b>Direct manipulation enabled</b><br />
-                  Touch the plant in the photo and drag it. Dresser items block invalid placements; unsupported drops settle onto the next lower surface.
+                  <b>Refined manipulation ready</b><br />
+                  The plant uses a transparent cutout, clean background plate, contact shadow, and basic foreground occlusion.
+                </div>
+              )}
+
+              {photoScene && !originalActive && (
+                <div className="status-card">
+                  Switch to <b>Original</b> to move calibrated objects. Generated proposals remain view-only.
                 </div>
               )}
 
