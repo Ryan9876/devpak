@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const required = [
   'PROJECT-CONSTITUTION.md','ARCHITECTURE.md','DESIGN-SYSTEM.md','CURRENT-STATE.md',
-  'src/lib/room-model/types.ts','src/lib/room-model/geometry.ts','src/lib/room-model/repository.ts',
-  'src/components/Studio.tsx','src/app/object-tools.css','src/app/studio/page.tsx','src/app/projects/page.tsx','src/app/projects/actions.ts',
+  'src/lib/room-model/types.ts','src/lib/room-model/geometry.ts','src/lib/room-model/repository.ts','src/lib/room-model/history.ts',
+  'src/components/Studio.tsx','src/app/object-tools.css','src/app/history.css','src/app/studio/page.tsx','src/app/projects/page.tsx','src/app/projects/actions.ts',
   'src/app/projects/[projectId]/studio/page.tsx','src/app/api/health/backend/route.ts',
   'supabase/migrations/202608200001_phase2_room_model.sql','supabase/migrations/202608200002_phase2_indexes.sql'
 ];
@@ -25,8 +25,15 @@ const studio = readFileSync('src/components/Studio.tsx','utf8');
 for (const marker of ['addObject','resizeSelected','rotateSelected','deleteSelected','findOpenPlacement']) {
   if (!studio.includes(marker)) throw new Error(`Missing visual object tool: ${marker}`);
 }
+for (const marker of ['commitLayout','syncLayout','async function undo','async function redo','comparisonIds','baseline']) {
+  if (!studio.includes(marker)) throw new Error(`Missing layout history capability: ${marker}`);
+}
 if (!studio.includes('Fixed elements are protected')) throw new Error('Fixed-element editing protection is missing.');
+const history = readFileSync('src/lib/room-model/history.ts','utf8');
+for (const marker of ['cloneLayout','layoutChanged','changedObjectIds']) {
+  if (!history.includes(marker)) throw new Error(`Missing history domain primitive: ${marker}`);
+}
 if (existsSync('.env.production')) {
   console.warn('NESTMETRIC_RELEASE_WARNING .env.production exists locally and is intentionally gitignored.');
 }
-console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true });
+console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true, layoutHistory: true });
