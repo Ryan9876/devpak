@@ -336,8 +336,9 @@ export default function PhotoWorkspace({
   }
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvasNode = canvasRef.current;
+    if (!canvasNode) return;
+    const canvas: HTMLDivElement = canvasNode;
 
     function beginNativePinch(event: TouchEvent) {
       if (event.touches.length < 2) return;
