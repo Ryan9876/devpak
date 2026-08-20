@@ -1,14 +1,23 @@
 # NestMetric Design System
 
-Calm spatial-tool aesthetic: warm neutral canvas, restrained forest-green primary actions, clay measurement accent, high-contrast dark text, subtle surfaces and minimal decoration. The room canvas is the primary working surface; forms and inspectors support it rather than dominate it.
+Calm functional-photo aesthetic: warm neutral application chrome, restrained forest-green primary actions, clay measurement accents, high-contrast dark text, subtle surfaces, and minimal decoration. The real room photo is the primary working surface. Geometry, forms, lists, and inspectors support the photo experience rather than dominate it.
 
-## Spatial workspace hierarchy
-- The room canvas is visually dominant and must preserve the Room Model's physical aspect ratio rather than stretching independently on each axis.
-- Object lists and inspectors stay compact and secondary. Capture and measurement workflows use progressive disclosure when they are not the user's immediate task.
-- Selected, fixed, dragging and invalid-placement states must be distinguishable without relying on color alone.
-- Status text is contextual to the active interaction; stale placement errors should not remain attached to unrelated selections.
+## Workspace hierarchy
+- Photo is the default and visually dominant Studio view for Organize, Arrange, and early Build exploration.
+- The original room photo must always remain available when generated visual proposals exist.
+- AI-generated visuals are labeled as visual concepts and must be visually distinguishable from the original photo and from measured/verified truth.
+- Geometry is a secondary precision view. It preserves the Room Model's physical aspect ratio, supports deterministic placement/verification, and becomes more prominent only when the task genuinely requires dimensional precision.
+- Do not make the core experience look or behave like CAD: avoid persistent grids, coordinates, dimension callouts, technical controls, or plan-first composition in the primary photo workflow.
+- Object lists, measurements, and inspectors stay compact and secondary. Measurement workflows use progressive disclosure until precision is relevant.
+- Status and conflict feedback is contextual to the active interaction; stale errors must not remain attached to unrelated selections or photo proposals.
 
-## Direct manipulation
+## Photo augmentation
+- Capturing or choosing a room photo is a first-class central workflow, not a sidebar utility.
+- Visual proposals preserve the photographed viewpoint and should read as believable changes to the same room rather than as mood boards, diagrams, or unrelated renderings.
+- Proposal history uses lightweight thumbnails/filmstrip navigation with the original photo treated as the stable reference.
+- Generated imagery never implies measured accuracy by appearance alone. When Build precision matters, direct the user to verified measurements and Geometry.
+
+## Direct manipulation in Geometry
 - Picking up a movable object preserves the exact grab point; objects must not jump to the pointer center.
 - Pointer movement is visually continuous. The 50 mm Room Model grid is applied on release, not on every pointer-move frame.
 - Movement is clamped to room bounds during drag. Fixed-object/opening conflicts may be previewed while moving, but an invalid release must revert to the last valid persisted position.
