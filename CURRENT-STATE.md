@@ -1,13 +1,13 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 durable-backend release candidate
-Status: **canonical Git source established; dedicated Supabase backend provisioned/migrated; backend-connected Vercel preview build validated and READY; not yet production-promoted.**
+Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; backend-connected Vercel preview build validated and READY; not yet production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
-- Release branch: `parallax/nestmetric-v0.2.2`
-- Canonical source commit validated by Vercel: `a91326e9d65a8d5b7203c34a39612e40186f51eb`
-- Branch is one clean commit ahead of `main`; temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
+- Canonical `main` baseline: `dc889c244b2bc7d1328ab2e04374ff1b37dc2670` (squash merge of PR #1).
+- Validated preview source commit: `a91326e9d65a8d5b7203c34a39612e40186f51eb`; subsequent source-control changes before merge were record-only and did not alter application behavior.
+- Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
 - Runtime dependencies are pinned and `.env.production` is excluded from source control.
 
 ### Durable backend
@@ -48,8 +48,8 @@ The existing NestMetric production alias remains on the previously verified rele
 - Google OAuth credentials are not configured; Google sign-in is intentionally disabled. Email magic-link authentication is the launch fallback.
 
 ## Development workflow normalization — 2026-08-19
-- GitHub is now the canonical source of truth; normal development no longer reconstructs source from Vercel artifacts.
-- Changes use `parallax/...` branches.
+- GitHub `main` is now the canonical source of truth; normal development no longer reconstructs source from Vercel artifacts.
+- Changes use `parallax/...` branches and PRs.
 - Risk-scoped validation commands are available: `validate:ui`, `validate:domain`, `validate:full`, and `classify:change`.
 - Normal release flow is: source change → scoped validation → one preview → live acceptance → merge/promotion.
 - Vercel chunk/bootstrap source transport is retired for normal development. The current connector lacks direct `gitSource`; the temporary preview bridge downloads one pinned public Git commit tarball rather than rebuilding source from deployment artifacts.
