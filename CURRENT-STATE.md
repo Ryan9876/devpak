@@ -1,7 +1,38 @@
 # NestMetric Current State
 
-## v0.2.6 room evidence
+## v0.2.7 durable Build Planner
 Status: **validated preview; canonical Git branch; not yet production-promoted.**
+
+### v0.2.7 changes
+- Project Studio now includes a durable Build Planner beneath the visual Room Model workspace.
+- Build requests explicitly provide build type, desired width/height/depth and primary material rather than deriving construction dimensions from image estimates.
+- Supported build kinds are shelving, storage, desk and cabinet.
+- Build generation requires verified/corrected `wall width` and `wall depth` evidence; estimated required evidence is rejected.
+- The deterministic generator checks candidate placement against room bounds, openings and fixed objects using the shared Room Model geometry engine.
+- Generated artifacts include overall dimensions, placement, front/side clearances, component dimensions, materials, 10% planning waste, evidence snapshot, assumptions, nonbinding material-cost range and nonbinding effort range.
+- Conflicted artifacts may be saved for iteration but are explicitly labeled `conflicted` rather than ready.
+- Build artifacts persist to owner-scoped `build_plans` with geometry, materials, verification snapshot, assumptions and estimates.
+- Studio shows recent saved build-plan history.
+- Build output explicitly states that it is planning output, not code-compliance, structural-engineering or professional construction approval.
+- Release validation now enforces the Build generator safety contract, durable API persistence and Build Planner output sections.
+
+### v0.2.7 validation
+- Branch: `parallax/nestmetric-v0.2.7-build-plans`
+- Preview deployment: `dpl_EaSUPv65tJXpzzJf8kJuXv7tP6hN`
+- Preview URL: `https://nestmetric-4wxrnh24m-lew7.vercel.app`
+- State: `READY`
+- Canonical source commit tested: `593760eb14543ecb0c030d617bb9cc64c308b021`
+- Full validation/build completed in about 18 seconds after source retrieval.
+- Release structure PASS with `buildPlans: true`.
+- Strict TypeScript PASS.
+- Room Model/domain tests: 6/6 PASS, including verified Build generation and rejection of estimated required evidence.
+- Room Model schema gate PASS.
+- Next.js 16.3.1 production build PASS, including `/api/builds`.
+- Preview runtime error/fatal log scan: no findings.
+- Production alias has not been changed.
+
+## v0.2.6 room evidence
+Status: **validated and merged to canonical `main`; production alias unchanged.**
 
 ### v0.2.6 changes
 - Private room captures are now visible inside the Studio after upload using short-lived signed Supabase Storage URLs.
@@ -29,6 +60,7 @@ Status: **validated preview; canonical Git branch; not yet production-promoted.*
 - Room Model schema gate PASS.
 - Next.js 16.3.1 production build PASS.
 - Preview runtime error/fatal log scan: no findings.
+- PR #5 squash merge: `9f3da9f766d34679c5a898a13072833960f04540`.
 - Production alias has not been changed.
 
 ## v0.2.5 project-scoped proposal history
