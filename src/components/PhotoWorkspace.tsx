@@ -1,6 +1,7 @@
 'use client';
 
-import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { boxFromPointerDelta, type NormalizedPhotoPoint } from '@/lib/photo/interaction';
 import { evaluatePlacement, resolveDrop } from '@/lib/photo/placement';
 import {
   DOUBLE_TAP_PHOTO_SCALE,
@@ -29,8 +30,7 @@ type ScreenPoint = { x: number; y: number };
 type DragSession = {
   itemId: string;
   pointerId: number;
-  offsetX: number;
-  offsetY: number;
+  startPointer: NormalizedPhotoPoint;
   original: PhotoSceneItem;
   latestBox: NormalizedBox;
   moved: boolean;
@@ -38,7 +38,6 @@ type DragSession = {
 
 type GestureSession =
   | { kind: 'idle'; pointerId: number; start: ScreenPoint; moved: boolean }
-  | { kind: 'object'; pointerId: number }
   | { kind: 'pan'; pointerId: number; start: ScreenPoint; startViewport: PhotoViewport; moved: boolean }
   | {
       kind: 'pinch';
@@ -70,12 +69,32 @@ function movedFromSource(item: PhotoSceneItem) {
   return Math.abs(source.x - item.bbox.x) > 0.004 || Math.abs(source.y - item.bbox.y) > 0.004 || Math.abs(source.w - item.bbox.w) > 0.004;
 }
 
-function boxStyle(box: NormalizedBox) {
+function boxStyle(box: NormalizedBox): CSSProperties {
   return {
     left: `${box.x * 100}%`,
     top: `${box.y * 100}%`,
     width: `${box.w * 100}%`,
     height: `${box.h * 100}%`,
+  };
+}
+
+function responderStyle(box: NormalizedBox, viewportScale: number): CSSProperties {
+  const minCssPx = 44 / Math.max(1, viewportScale);
+  return {
+    position: 'absolute',
+    left: `${(box.x + box.w / 2) * 100}%`,
+    top: `${(box.y + box.h / 2) * 100}%`,
+    width: `max(${box.w * 100}%, ${minCssPx}px)`,
+    height: `max(${box.h * 100}%, ${minCssPx}px)`,
+    transform: 'translate(-50%, -50%)',
+    zIndex: 16,
+    padding: 0,
+    border: 0,
+    borderRadius: 12,
+    background: 'transparent',
+    cursor: 'grab',
+    touchAction: 'none',
+    WebkitTouchCallout: 'none',
   };
 }
 
@@ -219,13 +238,11 @@ export default function PhotoWorkspace({
     dragRef.current = {
       itemId: item.id,
       pointerId,
-      offsetX: pointer.x - item.bbox.x,
-      offsetY: pointer.y - item.bbox.y,
+      startPointer: pointer,
       original: { ...item, bbox: { ...item.bbox } },
       latestBox: { ...item.bbox },
       moved: false,
     };
-    gestureRef.current = { kind: 'object', pointerId };
     return true;
   }
 
@@ -236,11 +253,7 @@ export default function PhotoWorkspace({
     if (!pointer) return;
     const current = sceneRef.current.items.find((item) => item.id === drag.itemId);
     if (!current) return;
-    const desired = clampBox({
-      ...current.bbox,
-      x: pointer.x - drag.offsetX,
-      y: pointer.y - drag.offsetY,
-    });
+    const desired = clampBox(boxFromPointerDelta(drag.original.bbox, drag.startPointer, pointer));
     if (Math.abs(desired.x - drag.original.bbox.x) > 0.0015 || Math.abs(desired.y - drag.original.bbox.y) > 0.0015) {
       drag.moved = true;
     }
@@ -296,11 +309,42 @@ export default function PhotoWorkspace({
     if (message) onStatus?.(message);
   }
 
+  function handleObjectPointerDown(event: PointerEvent<HTMLButtonElement>, item: PhotoSceneItem) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = { x: event.clientX, y: event.clientY };
+    if (!beginObjectDrag(event.pointerId, point, item)) return;
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Best effort on mobile Safari. */ }
+  }
+
+  function handleObjectPointerMove(event: PointerEvent<HTMLButtonElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId || nativePinchActiveRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveObject({ x: event.clientX, y: event.clientY });
+  }
+
+  function handleObjectPointerUp(event: PointerEvent<HTMLButtonElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveObject({ x: event.clientX, y: event.clientY });
+    try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* Best effort. */ }
+    void finishObjectDrag();
+  }
+
+  function handleObjectPointerCancel(event: PointerEvent<HTMLButtonElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelObjectDrag('Move cancelled.');
+  }
+
   function beginPointerPinch() {
-    if (nativePinchActiveRef.current) return;
+    if (nativePinchActiveRef.current || dragRef.current) return;
     const entries = Array.from(activePointersRef.current.entries()).slice(0, 2);
     if (entries.length < 2) return;
-    cancelObjectDrag();
     const rect = canvasRect();
     if (!rect) return;
     const [[idA, a], [idB, b]] = entries;
@@ -430,8 +474,8 @@ export default function PhotoWorkspace({
     lastTapRef.current = { at: now, point };
   }
 
-  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (nativePinchActiveRef.current) {
+  function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (nativePinchActiveRef.current || dragRef.current) {
       event.preventDefault();
       return;
     }
@@ -440,17 +484,12 @@ export default function PhotoWorkspace({
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
-    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Pointer capture is best effort on mobile Safari. */ }
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Best effort on mobile Safari. */ }
 
     if (activePointersRef.current.size >= 2) {
       beginPointerPinch();
       return;
     }
-
-    const itemElement = target.closest<HTMLElement>('[data-photo-item-id]');
-    const itemId = itemElement?.dataset.photoItemId;
-    const item = itemId ? sceneRef.current.items.find((candidate) => candidate.id === itemId) : null;
-    if (item && beginObjectDrag(event.pointerId, point, item)) return;
 
     if (viewportRef.current.scale > 1.001) {
       gestureRef.current = {
@@ -466,7 +505,7 @@ export default function PhotoWorkspace({
     gestureRef.current = { kind: 'idle', pointerId: event.pointerId, start: point, moved: false };
   }
 
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+  function handleCanvasPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (nativePinchActiveRef.current || !activePointersRef.current.has(event.pointerId)) return;
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
@@ -476,10 +515,6 @@ export default function PhotoWorkspace({
 
     if (gesture.kind === 'pinch') {
       updatePointerPinch(gesture);
-      return;
-    }
-    if (gesture.kind === 'object' && gesture.pointerId === event.pointerId) {
-      moveObject(point);
       return;
     }
     if (gesture.kind === 'pan' && gesture.pointerId === event.pointerId) {
@@ -514,7 +549,7 @@ export default function PhotoWorkspace({
     }
   }
 
-  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+  function handleCanvasPointerUp(event: PointerEvent<HTMLDivElement>) {
     if (nativePinchActiveRef.current) {
       activePointersRef.current.delete(event.pointerId);
       return;
@@ -523,20 +558,11 @@ export default function PhotoWorkspace({
     const point = { x: event.clientX, y: event.clientY };
     const gesture = gestureRef.current;
 
-    if (gesture?.kind === 'object' && gesture.pointerId === event.pointerId) {
-      moveObject(point);
-      activePointersRef.current.delete(event.pointerId);
-      gestureRef.current = null;
-      void finishObjectDrag();
-      return;
-    }
-
     activePointersRef.current.delete(event.pointerId);
     if (gesture?.kind === 'pinch') {
       transitionAfterPointerPinch();
       return;
     }
-
     if (gesture?.kind === 'pan' && gesture.pointerId === event.pointerId) {
       if (!gesture.moved) processEmptyTap(point);
       gestureRef.current = null;
@@ -548,10 +574,9 @@ export default function PhotoWorkspace({
     }
   }
 
-  function handlePointerCancel(event: PointerEvent<HTMLDivElement>) {
+  function handleCanvasPointerCancel(event: PointerEvent<HTMLDivElement>) {
     activePointersRef.current.delete(event.pointerId);
     if (nativePinchActiveRef.current) return;
-    if (dragRef.current?.pointerId === event.pointerId) cancelObjectDrag('Move cancelled.');
     if (gestureRef.current?.kind === 'pinch') transitionAfterPointerPinch();
     else gestureRef.current = null;
   }
@@ -566,10 +591,10 @@ export default function PhotoWorkspace({
         <div
           ref={canvasRef}
           className={`photo-interaction-canvas${draggingId ? ' is-dragging' : ''}${viewport.scale > 1.001 ? ' is-zoomed' : ''}`}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onPointerCancel={handleCanvasPointerCancel}
           onContextMenu={(event) => event.preventDefault()}
         >
           <img className="photo-interaction-sizer" src={backgroundImageUrl} alt="" draggable={false} aria-hidden="true" />
@@ -598,20 +623,17 @@ export default function PhotoWorkspace({
                 <div key={item.id}>
                   {showHole && item.sourceBbox && <div className="photo-source-hole" style={boxStyle(item.sourceBbox)} aria-hidden="true" />}
                   <div className={`photo-contact-shadow shadow-${support?.kind ?? 'unknown'}`} style={shadowStyle(item, support?.kind)} aria-hidden="true" />
-                  <button
-                    type="button"
-                    aria-label={`Move ${item.label}`}
-                    data-photo-item-id={item.id}
+                  <div
                     className={`photo-scene-item${selectedId === item.id ? ' selected' : ''}${draggingId === item.id ? ' dragging' : ''}${droppingId === item.id ? ' dropping' : ''}`}
-                    style={boxStyle(item.bbox)}
-                    onContextMenu={(event) => event.preventDefault()}
+                    style={{ ...boxStyle(item.bbox), pointerEvents: 'none' }}
+                    aria-hidden="true"
                   >
                     {refined && cutoutUrl ? (
-                      <span className="photo-object-cutout" aria-hidden="true">
+                      <span className="photo-object-cutout">
                         <img src={cutoutUrl} alt="" draggable={false} />
                       </span>
                     ) : (
-                      <span className="photo-object-crop" aria-hidden="true">
+                      <span className="photo-object-crop">
                         <img
                           src={sourceImageUrl}
                           alt=""
@@ -625,7 +647,19 @@ export default function PhotoWorkspace({
                         />
                       </span>
                     )}
-                  </button>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Select and move ${item.label}`}
+                    aria-pressed={selectedId === item.id}
+                    style={responderStyle(item.bbox, viewport.scale)}
+                    onPointerDown={(event) => handleObjectPointerDown(event, item)}
+                    onPointerMove={handleObjectPointerMove}
+                    onPointerUp={handleObjectPointerUp}
+                    onPointerCancel={handleObjectPointerCancel}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={() => setSelectedId(item.id)}
+                  />
                 </div>
               );
             })}
@@ -679,7 +713,7 @@ export default function PhotoWorkspace({
       <div className="photo-interaction-footer">
         <span>
           <b>{refined ? 'Refined manipulation' : 'Direct manipulation'}</b>
-          {viewport.scale > 1.001 ? ' · drag empty space to pan · pinch or use +/− to zoom' : ' · pinch or use + to zoom · touch the plant to move'}
+          {viewport.scale > 1.001 ? ' · drag empty space to pan · touch an object to move' : ' · touch an object to select and move · pinch or use + to zoom'}
         </span>
         <span>{selected?.supportSurfaceId ? `Supported by ${localScene.surfaces.find((surface) => surface.id === selected.supportSurfaceId)?.label ?? selected.supportSurfaceId}` : 'Unsupported'}</span>
       </div>
