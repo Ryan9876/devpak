@@ -68,6 +68,19 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
     return true;
   }
 
+  async function recordDecision(nextStatus: 'accepted' | 'rejected' | 'edited') {
+    if (!proposal || demo || proposal.id.startsWith('det-')) return true;
+    const res = await fetch(`/api/proposals/${proposal.id}/decision`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (res.ok) return true;
+    const json = await res.json().catch(() => ({}));
+    setStatus(json.error || 'Proposal history could not be updated.');
+    return false;
+  }
+
   function findOpenPlacement(seed: RoomObject) {
     const step = 100_000;
     for (let y = step; y + seed.size.depthUm <= room.boundary.depthUm; y += step) {
@@ -204,14 +217,18 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
       return;
     }
     try {
-      const res = await fetch('/api/ai/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode, goal }) });
+      const res = await fetch('/api/ai/plan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode, goal, projectId: room.projectId }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Proposal failed');
       setProposal(json.proposal);
-      setStatus('Proposal ready. Geometry conflicts are shown separately.');
+      setStatus('Proposal saved to this project. Geometry conflicts are shown separately.');
     } catch (err) {
       setProposal(deterministicProposal(room, mode));
-      setStatus(`${err instanceof Error ? err.message : 'AI unavailable'} Deterministic fallback shown.`);
+      setStatus(`${err instanceof Error ? err.message : 'AI unavailable'} Local deterministic fallback shown.`);
     }
   }
 
@@ -228,10 +245,25 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
     }
     for (const o of changed) {
       const before = room.objects.find((x) => x.id === o.id);
-      if (o.position.xUm !== before?.position.xUm || o.position.yUm !== before?.position.yUm || o.rotationDeg !== before?.rotationDeg) await persist(o);
+      if (o.position.xUm !== before?.position.xUm || o.position.yUm !== before?.position.yUm || o.rotationDeg !== before?.rotationDeg) {
+        if (!(await persist(o))) {
+          setStatus('The proposal was not fully applied. Review the room before retrying.');
+          return;
+        }
+      }
     }
+    const recorded = await recordDecision('accepted');
+    if (!recorded) return;
     setProposal(null);
-    setStatus('Proposal applied to the Room Model.');
+    setStatus('Proposal applied and recorded in project history.');
+  }
+
+  async function reject() {
+    if (!proposal) return;
+    const recorded = await recordDecision('rejected');
+    if (!recorded) return;
+    setProposal(null);
+    setStatus('Proposal rejected and recorded in project history.');
   }
 
   const scaleX = (v: number) => `${v / room.boundary.widthUm * 100}%`;
@@ -281,7 +313,7 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
         {mode === 'build' && <div className={`status-card ${gate.allowed ? '' : 'warning'}`}><b>{gate.allowed ? 'Build evidence ready' : 'Build evidence locked'}</b><br />{gate.allowed ? 'Required measurements are verified.' : `Missing: ${[...gate.missing, ...gate.unverified].join(', ') || 'verification'}`}</div>}
         <label>Goal<input value={goal} onChange={(e) => setGoal(e.target.value)} /></label>
         <button className="button primary" onClick={propose}>Generate {mode} proposal</button>
-        {proposal && <div className="proposal-card"><h3>{proposal.title}</h3><p>{proposal.summary}</p><ul>{proposal.rationale.map((x) => <li key={x}>{x}</li>)}</ul>{proposal.conflicts.length > 0 && <p><b>Conflicts:</b> {proposal.conflicts.join(' ')}</p>}<button className="small-button dangerless" onClick={accept} disabled={proposal.conflicts.length > 0}>Apply proposal</button></div>}
+        {proposal && <div className="proposal-card"><h3>{proposal.title}</h3><p>{proposal.summary}</p><ul>{proposal.rationale.map((x) => <li key={x}>{x}</li>)}</ul>{proposal.conflicts.length > 0 && <p><b>Conflicts:</b> {proposal.conflicts.join(' ')}</p>}<div className="proposal-actions"><button className="small-button dangerless" onClick={accept} disabled={proposal.conflicts.length > 0}>Apply proposal</button><button className="small-button" onClick={reject}>Reject</button></div></div>}
         {status && <div className="status-card">{status}</div>}
         {!demo && <form action="/auth/signout" method="post"><button className="small-button" type="submit">Sign out</button></form>}
       </aside>
