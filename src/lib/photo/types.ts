@@ -26,12 +26,20 @@ export type PhotoSceneItem = {
   fixed: boolean;
 };
 
+export type PhotoOccluder = {
+  id: string;
+  label: string;
+  polygon: NormalizedPoint[];
+  hidesSurfaceIds: string[];
+};
+
 export type PhotoScene = {
   version: 1;
   coordinateSpace: 'normalized_image';
   calibration: 'manual_v1' | 'vision_assisted';
   surfaces: PhotoSurface[];
   items: PhotoSceneItem[];
+  occluders?: PhotoOccluder[];
 };
 
 export type PlacementState = 'supported' | 'blocked' | 'falling' | 'invalid';
