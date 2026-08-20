@@ -112,4 +112,18 @@ export const bedroomDresserSceneV1: PhotoScene = {
       fixed: true,
     },
   ],
+  occluders: [
+    {
+      id: 'bed-foreground',
+      label: 'bed foreground',
+      polygon: [
+        { x: 0.000, y: 0.635 },
+        { x: 0.330, y: 0.615 },
+        { x: 0.790, y: 0.815 },
+        { x: 0.800, y: 1.000 },
+        { x: 0.000, y: 1.000 },
+      ],
+      hidesSurfaceIds: ['floor'],
+    },
+  ],
 };
