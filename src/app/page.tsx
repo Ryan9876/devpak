@@ -6,7 +6,7 @@ export default function HomePage() {
           <p className="eyebrow">ROOM INTELLIGENCE</p>
           <h1>Understand the room. Then change it with confidence.</h1>
           <p className="lead">NestMetric turns verified room dimensions, photos, objects and constraints into one editable Room Model for organizing, arranging and building.</p>
-          <div className="actions"><a className="button primary" href="/studio">Open Studio</a><a className="button secondary" href="/login">Sign in</a></div>
+          <div className="actions"><a className="button primary" href="/projects">Open Projects</a><a className="button secondary" href="/studio">Open latest room</a></div>
         </div>
         <div className="hero-plan" aria-label="Example room plan">
           <div className="room-outline"><span className="obj sofa">Sofa</span><span className="obj table">Table</span><span className="obj shelf">Shelf</span><span className="door">Door</span></div>

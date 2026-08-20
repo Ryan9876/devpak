@@ -1,12 +1,35 @@
 # NestMetric Current State
 
-## v0.2.2 Phase 2 durable-backend release candidate
+## v0.2.3 project-scoped persistence preview
+Status: **validated preview; canonical Git branch; not yet production-promoted.**
+
+### v0.2.3 changes
+- Durable Projects dashboard added at `/projects`.
+- Authenticated users can create named projects; each project receives one starter Room Model.
+- Project-specific Studio route added at `/projects/[projectId]/studio`.
+- Project Studio loading is scoped by both `project_id` and authenticated `owner_id`; RLS remains authoritative.
+- Legacy `/studio` now resolves to the user’s latest project or creates the first project and redirects to its explicit URL.
+- Project creation cleanup is fail-safe: a partially created project is deleted if room/object/opening initialization fails, with cascading cleanup.
+- Primary navigation and landing CTA now expose Projects as the durable entry point.
+- Release validation now requires project-scoped routes/actions and rejects a non-project-scoped compatibility Studio.
+
+### v0.2.3 validation
+- Branch: `parallax/nestmetric-v0.2.3-persistence`
+- Preview deployment: `dpl_93VA4zGjxpmin6NBL2ToRjremXH9`
+- Preview URL: `https://nestmetric-5duo4o31p-lew7.vercel.app`
+- State: `READY`
+- Validation/build duration after source retrieval: about 23 seconds.
+- `validate:full` passed: release structure, strict TypeScript, 3/3 Room Model domain tests, schema gate, Next.js production build.
+- Built routes include `/projects`, `/projects/[projectId]/studio`, `/studio`, `/login`, backend health, auth callback/signout and AI planning.
+- Vercel runtime-error scan after deployment: no error clusters.
+- Production alias has not been changed.
+
+## v0.2.2 Phase 2 durable-backend baseline
 Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; backend-connected Vercel preview build validated and READY; not yet production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
-- Canonical `main` baseline: `dc889c244b2bc7d1328ab2e04374ff1b37dc2670` (squash merge of PR #1).
-- Validated preview source commit: `a91326e9d65a8d5b7203c34a39612e40186f51eb`; subsequent source-control changes before merge were record-only and did not alter application behavior.
+- Canonical source is maintained through `parallax/...` branches and pull requests.
 - Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
 - Runtime dependencies are pinned and `.env.production` is excluded from source control.
 
@@ -31,25 +54,15 @@ Status: **canonical Git source established on `main`; dedicated Supabase backend
 - Backend health route checks real Supabase connectivity and anonymous RLS non-disclosure.
 - Canonical Room Model, Organize / Arrange / Build Studio, geometry/build gating, private Storage capture, planning persistence and measurement verification remain intact.
 
-### Backend-connected preview
-- Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`)
-- Preview deployment: `dpl_3p41A3kZdMKng9Pe6sBfJV4Veexu`
-- Preview URL: `https://nestmetric-eza9u7dyr-lew7.vercel.app`
-- State: `READY`
-- Canonical Git commit archive retrieved successfully from GitHub and built directly; no Vercel source-chunk transport was used.
-- `validate:full` passed: release structure, strict TypeScript, 3/3 domain tests, Room Model schema gate, and Next.js 16.3.1 production build.
-- Build completed in about 26 seconds after source retrieval.
-- Deployment Protection prevents the available verifier from completing an external cookie-authenticated route smoke without forwarding a temporary share token; that verifier limitation is not treated as deployment verification.
-
 ### Production state
-The existing NestMetric production alias remains on the previously verified release. v0.2.2 will not be production-promoted until a real authenticated persistence acceptance check proves account/session, project/room persistence, object movement, measurement persistence, and private asset storage against Supabase.
+The existing NestMetric production alias remains on the previously verified release. Production cutover remains gated on a real authenticated persistence acceptance check against Supabase.
 
 ### Known external constraints
 - Google OAuth credentials are not configured; Google sign-in is intentionally disabled. Email magic-link authentication is the launch fallback.
 
-## Development workflow normalization — 2026-08-19
-- GitHub `main` is now the canonical source of truth; normal development no longer reconstructs source from Vercel artifacts.
+## Development workflow normalization
+- GitHub `main` is the canonical source of truth; normal development no longer reconstructs source from Vercel artifacts.
 - Changes use `parallax/...` branches and PRs.
 - Risk-scoped validation commands are available: `validate:ui`, `validate:domain`, `validate:full`, and `classify:change`.
 - Normal release flow is: source change → scoped validation → one preview → live acceptance → merge/promotion.
-- Vercel chunk/bootstrap source transport is retired for normal development. The current connector lacks direct `gitSource`; the temporary preview bridge downloads one pinned public Git commit tarball rather than rebuilding source from deployment artifacts.
+- Vercel chunk/bootstrap source transport is retired for normal development. The current connector lacks direct `gitSource`; the preview bridge downloads one pinned public Git commit tarball rather than rebuilding source from deployment artifacts.
