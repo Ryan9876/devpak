@@ -51,6 +51,7 @@ export default function PhotoWorkspace(props: Props) {
   const [selecting, setSelecting] = useState(scene.calibration !== 'vision_assisted');
   const [selectionBusy, setSelectionBusy] = useState(false);
   const [selectionPoint, setSelectionPoint] = useState<PickPoint | null>(null);
+  const [selectionError, setSelectionError] = useState('');
   const attemptedKeyRef = useRef('');
   const pickerDownRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -180,6 +181,7 @@ export default function PhotoWorkspace(props: Props) {
     setFailure('');
     setPhase('idle');
     setSelectionPoint(null);
+    setSelectionError('');
     setSelecting(true);
     onStatus?.('Tap the center of one object you want to move.');
   }
@@ -187,6 +189,7 @@ export default function PhotoWorkspace(props: Props) {
   async function selectObjectAt(point: PickPoint) {
     if (!sourceObjectPath || selectionBusy || disabled) return;
     setSelectionPoint(point);
+    setSelectionError('');
     setSelectionBusy(true);
     onStatus?.('Identifying the object you tapped…');
 
@@ -220,10 +223,12 @@ export default function PhotoWorkspace(props: Props) {
       await onSceneChanged(nextScene);
       setSelecting(false);
       setSelectionPoint(null);
+      setSelectionError('');
       onStatus?.(`${selected.item.label} selected. Preparing its real photo pixels for movement…`);
     } catch (error) {
-      setSelectionPoint(null);
-      onStatus?.(error instanceof Error ? error.message : 'Unable to identify that object.');
+      const message = error instanceof Error ? error.message : 'Unable to identify that object.';
+      setSelectionError(message);
+      onStatus?.(message);
     } finally {
       setSelectionBusy(false);
     }
@@ -278,7 +283,7 @@ export default function PhotoWorkspace(props: Props) {
                 top: `${selectionPoint.y * 100}%`,
                 width: 30,
                 height: 30,
-                border: '3px solid #fff',
+                border: `3px solid ${selectionError ? '#d9534f' : '#fff'}`,
                 borderRadius: '50%',
                 boxShadow: '0 0 0 3px rgba(36,53,46,.85)',
                 transform: 'translate(-50%, -50%)',
@@ -308,6 +313,7 @@ export default function PhotoWorkspace(props: Props) {
         </div>
 
         <div
+          role={selectionError ? 'alert' : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -315,13 +321,17 @@ export default function PhotoWorkspace(props: Props) {
             gap: 12,
             padding: '10px 12px',
             borderRadius: 12,
-            background: 'rgba(220,230,220,.84)',
-            color: '#24352e',
+            background: selectionError ? '#fff1d6' : 'rgba(220,230,220,.84)',
+            color: selectionError ? '#5c4930' : '#24352e',
             fontSize: '.72rem',
             lineHeight: 1.4,
           }}
         >
-          <span><b>Choose something to move.</b> Tap near the center of one distinct object in the real photo.</span>
+          <span>
+            {selectionError
+              ? <><b>Object not identified.</b> {selectionError} Tap another distinct object or try nearer its center.</>
+              : <><b>Choose something to move.</b> Tap near the center of one distinct object in the real photo.</>}
+          </span>
           {scene.calibration === 'vision_assisted' && (
             <button type="button" onClick={() => setSelecting(false)} disabled={selectionBusy} style={pillButtonStyle(selectionBusy)}>
               Cancel
