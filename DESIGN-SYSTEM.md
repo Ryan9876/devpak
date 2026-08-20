@@ -16,20 +16,23 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - Visual proposals preserve the photographed viewpoint and should read as believable changes to the same room rather than as mood boards, diagrams, or unrelated renderings.
 - Proposal history uses lightweight thumbnails/filmstrip navigation with the original photo treated as the stable reference.
 - Generated imagery never implies measured accuracy by appearance alone. When Build precision matters, direct the user to verified measurements and Geometry.
-- Source-photo derivatives used for manipulation—background plates, transparent cutouts, masks, or similar internal assets—must never appear as user-facing source photos or proposal-history entries.
+- Source-photo derivatives used for manipulation—background plates, exact-pixel cutouts, masks, or similar internal assets—must never appear as user-facing source photos or proposal-history entries.
 
 ## Direct manipulation in Photo
 - Direct manipulation happens on the original calibrated room photo. Generated visual proposals remain view-only unless they receive their own explicit calibration contract later.
-- A movable object should look like the photographed object itself, not a rectangular sticker or crop. The target renderer is a transparent object cutout over a clean reconstructed background plate.
+- The live drag representation must preserve the photographed object's original pixels. AI-generated object recreations are not acceptable as the primary manipulation layer because they can change identity, texture, leaves, edges, lighting, or shape.
+- A movable object is extracted from the immutable source photo through an explicit segmentation mask and stored/rendered as a transparent exact-pixel cutout over a clean reconstructed background plate.
+- AI may prepare the clean background plate, but it does not render or recreate the object being dragged.
 - The original source image remains immutable. Removing an object from its source location is represented by a separate background plate, never by destructive editing of the source asset.
 - Picking up an object preserves the exact touch/grab offset. The object follows the finger continuously without snapping while moving.
 - Support, collision, and gravity feedback may appear only while relevant. Support surfaces and blocker regions are interaction diagnostics, not permanent visual overlays.
-- A selected object uses a restrained halo and small touch affordance. Persistent object-name pills, heavy bounding boxes, or CAD-like handles are not part of the normal photo state.
+- A selected object uses only a restrained edge/halo effect derived from the object silhouette. Persistent object-name pills, rectangular selection boxes, corner handles, or CAD-like controls are not part of the normal photo state.
 - A placed object receives a subtle contact shadow appropriate to its support surface. Shadows support visual grounding but do not imply physical simulation accuracy.
 - Foreground occlusion should preserve scene depth when a moved object belongs behind a photographed foreground element. Occlusion masks remain invisible to the user.
-- Unsupported release invokes deterministic gravity to the nearest lower valid support. Collision resolution and support validity remain deterministic even when the rendered object is AI-extracted.
+- Unsupported release invokes deterministic gravity to the nearest lower valid support. Collision resolution and support validity remain deterministic regardless of visual compositing quality.
 - Visual scale may change modestly with image-space depth to maintain perspective, but must not be presented as a measurement.
-- If refined extraction/inpainting is unavailable, a crop-based fallback may keep the interaction usable, but it is a temporary degradation state and should not be mistaken for target visual quality.
+- Scene preparation should be reusable and idempotent: once a clean background and exact-pixel cutout exist for the source photo/object calibration, pointer movement never requires image generation.
+- If the exact-pixel segmentation path is unavailable, a crop-based fallback may keep the interaction usable, but it is a temporary degradation state and should not be mistaken for target visual quality.
 
 ## Direct manipulation in Geometry
 - Picking up a movable object preserves the exact grab point; objects must not jump to the pointer center.
