@@ -1,14 +1,14 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; mobile viewport zoom/pan is build-validated; Object Interaction v4 now adopts FormShift-style object-owned selection/drag responders and is build-validated in a READY Preview with live iPhone acceptance pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; mobile viewport zoom/pan is build-validated and live use improved; Object Interaction v4 has been live-tested as better for finger selection/zoom/pan; automatic refined-scene preparation is now build-validated in a READY Preview with live derivative creation pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`.
 - Canonical `main` remains unchanged by this work.
 - Active feature branch: `parallax/object-interaction-v4`, created from `parallax/photo-viewport-zoom-pan`.
-- Object Interaction v4 runtime commit validated in the current Preview: `fdf291174f0f994f8782ec4bc28b214d816d722a`.
-- Subsequent commits on the same branch update authoritative records only and do not change the validated runtime package.
+- Automatic-refinement runtime commit validated in the current Preview: `3729f9bac347891c335b1efd1b821004510b7758`.
+- The validated v4 interaction implementation is preserved byte-for-byte in `src/components/PhotoWorkspaceCore.tsx`; `src/components/PhotoWorkspace.tsx` is now a thin preparation controller around that core.
 - Temporary Vercel bootstrap files are deployment-only and are not canonical source artifacts.
 
 ### Durable product direction — 2026-08-20
@@ -56,7 +56,7 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Live dragging remains browser-side compositing with exact source pixels, deterministic support/collision/gravity, perspective-aware scale, contact shadow, and calibrated foreground occlusion.
 - iOS/Safari native image callouts/context menus are suppressed on the manipulation surface.
 - Visual Proposals are explicitly view-only and direct users back to `Original` for manipulation.
-- Live v3 derivative preparation and final edge/background visual-quality acceptance remain pending. The most recent user screenshot still showed `Direct manipulation`, indicating the fallback layer rather than a completed refined v3 derivative set.
+- Before the automatic-refinement pass, Supabase contained zero `scene_object_cutout` and zero `scene_background_plate` rows for the accepted source photo; only the original source and AI visual proposals existed. This confirmed the earlier screenshots were using the fallback crop renderer rather than v3.
 
 ### Photo viewport zoom/pan
 - Viewport state is `{scale, tx, ty}` with clamped zoom range `1x..5x` and a `2.5x` double-tap target.
@@ -65,41 +65,53 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - iOS/Safari uses native non-passive touch listeners for pinch because the earlier Pointer-Event-only pinch path did not engage reliably in live iPhone testing.
 - Pointer Events remain available for desktop navigation and object interaction.
 - A persistent compact `− / live scale / +` control is available even at `1x`; Reset appears above `1x` as a guaranteed fallback to browser gesture delivery.
-- Existing viewport validation covers inverse coordinate mapping, anchored zoom, and translation clamping.
+- The user subsequently reported the interaction was **“better working with using my finger and zoom pan”** while the viewport was visibly zoomed, so the navigation/selection architecture is materially improved even though visual refinement is still pending.
 
 ### Object Interaction v4 — FormShift-derived responder model
 - FormShift review showed that its reliable selection comes primarily from **per-object gesture ownership**, not a more complex global hit-test algorithm.
-- NestMetric now separates object rendering from object interaction. The visible photo object is non-interactive; a dedicated transparent responder is positioned over each movable object's photo-space footprint.
+- NestMetric separates object rendering from object interaction. The visible photo object is non-interactive; a dedicated transparent responder is positioned over each movable object's photo-space footprint.
 - The responder selects and claims a one-finger gesture immediately on pointer-down. The photo canvas no longer uses `target.closest('[data-photo-item-id]')` or other DOM-ancestry heuristics to decide which object the user intended to touch.
 - The responder keeps at least a 44px screen-space hit target. The CSS-space minimum is divided by current viewport scale so zoom does not inflate the hit region into an oversized screen-space target.
-- Object movement now records the original box and normalized starting pointer once, then computes position from pointer delta via `src/lib/photo/interaction.ts`. This mirrors FormShift's start-position + gesture-delta behavior while preserving NestMetric's normalized photo coordinates.
+- Object movement records the original box and normalized starting pointer once, then computes position from pointer delta via `src/lib/photo/interaction.ts`.
 - A simple tap selects but does not persist. Drag movement is transient/local until release; a successful release performs one durable scene write.
-- Invalid release reverts to the starting state. Unsupported release continues through NestMetric's deterministic gravity resolver, so v4 keeps NestMetric's stronger support/collision/gravity behavior.
-- The canvas now owns only viewport concerns: pinch, empty-space pan, double-tap zoom, and explicit zoom controls.
-- Native two-finger touch still overrides an active object responder on iOS: the object move is cancelled/reverted and viewport pinch takes over without persisting the cancelled move.
-- Live iPhone acceptance of the new responder selection feel is still pending.
+- Invalid release reverts to the starting state. Unsupported release continues through NestMetric's deterministic gravity resolver.
+- The canvas owns only viewport concerns: pinch, empty-space pan, double-tap zoom, and explicit zoom controls.
+- Native two-finger touch overrides an active object responder on iOS: the object move is cancelled/reverted and viewport pinch takes over without persisting the cancelled move.
+- The user live-tested this responder build and reported improved finger/zoom/pan behavior. Selection mechanics are therefore accepted as directionally successful; further work should not regress back to canvas-level object arbitration.
 
-### Current Object Interaction v4 Preview — build validated
+### Automatic refined-scene preparation
+- `PhotoWorkspaceCore.tsx` preserves the validated v4 interaction implementation unchanged.
+- `PhotoWorkspace.tsx` now acts as a preparation controller around that core.
+- When a calibrated Original photo has source masks but lacks refined derivatives, the wrapper automatically enters **Preparing room objects…** instead of presenting the crude crop as normal interaction.
+- The wrapper extracts the exact private Storage object path from the signed source URL, then calls `/api/ai/photo-scene-assets/resolve`.
+- The resolver is authenticated and owner-scoped; it maps that exact `object_path` to the authoritative `roomId`, `sourceAssetId`, and movable `itemId`. It does not guess from the user's newest photo.
+- The browser then calls the existing idempotent `/api/ai/photo-scene-assets` route. Existing v3 derivatives are reused; missing derivatives are created once.
+- Successful preparation reloads Studio so refreshed private signed URLs are used by the refined compositor.
+- If preparation genuinely fails, the working v4 fallback remains available but is explicitly labeled **Basic manipulation mode** with a **Retry refinement** action. Silent fallback is no longer treated as target quality.
+- Live authenticated derivative creation is still pending; build success does not yet prove the current room's exact cutout/background assets were generated.
+
+### Current automatic-refinement Preview — build validated
 - Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`).
-- Deployment: `dpl_BLZvoshathdFPLcHXEfxXmtGoLAa`.
-- URL: `https://nestmetric-agvzbrdrb-lew7.vercel.app`.
+- Deployment: `dpl_9xfNSaMybHJdqxiZXNphWFW52JT6`.
+- URL: `https://nestmetric-j1ytfpbc9-lew7.vercel.app`.
 - State: `READY`.
 - Preview only; production aliases were not changed.
-- Deployment bootstrapped immutable runtime commit `fdf291174f0f994f8782ec4bc28b214d816d722a`.
-- Bootstrap verification required the object-level pointer handlers and pointer-delta helper and rejected the old canvas DOM-search selection path.
-- Domain validation passed `10/10`: existing Room Model/photo support/collision/gravity tests, three viewport tests, and a new object-drag delta test confirming motion follows pointer delta without recentering.
+- Deployment bootstrapped immutable runtime commit `3729f9bac347891c335b1efd1b821004510b7758`.
+- Bootstrap verification confirmed the automatic preparation wrapper, retry state, frozen v4 interaction core, and owner-scoped resolver were present before validation.
+- Domain validation passed `10/10`: Room Model/photo support/collision/gravity, viewport mapping/zoom/clamping, and object pointer-delta behavior.
 - Next.js `16.3.1` production compilation passed.
 - TypeScript passed.
-- Built routes include `/api/ai/photo-scene-assets`, `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- `npm install` surfaced one high-severity dependency advisory during Preview validation. Object Interaction v4 did not modify package dependencies, so this is a separate dependency-audit item and not introduced by the v4 interaction change.
+- Built routes include `/api/ai/photo-scene-assets`, `/api/ai/photo-scene-assets/resolve`, `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
+- Live acceptance criterion: opening the calibrated Original should automatically show preparation, create/reuse private `scene_background_plate` and `scene_object_cutout` assets, reload into **Refined manipulation**, and preserve v4 finger/zoom/pan/gravity behavior.
 
 ### Production state
-The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/viewport/object-interaction acceptance and explicit promotion authorization.
+The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/refinement acceptance and explicit promotion authorization.
 
 ### Known platform constraints
 - Vercel project-level framework configuration still reports `framework: null`; Preview deployments explicitly supply a Next.js framework override.
 - The Vercel inline deployment path does not reliably inherit project runtime environment variables. Public Supabase project configuration has a safe dedicated-project fallback; AI generation uses Vercel AI Gateway/OIDC rather than an inherited OpenAI provider key.
 - Supabase default SMTP is not production-ready; Google OAuth is the accepted auth path unless custom SMTP is added later.
+- `npm install` previously surfaced one high-severity dependency advisory during Preview validation. The interaction/refinement work did not modify package dependencies, so this remains a separate dependency-audit item.
 
 ## Development workflow normalization
 - GitHub `main` remains the canonical source of truth.
