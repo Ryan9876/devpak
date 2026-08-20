@@ -7,6 +7,7 @@ NestMetric uses one canonical Room Model across web capture, optional iOS/LiDAR 
 - Next.js App Router on Vercel.
 - Supabase project `yyrpennpmwajlbepoemt` provides managed PostgreSQL, Auth, and private object Storage for the durable production backend.
 - Supabase SSR cookie clients are request-scoped; server authorization uses verified claims rather than trusting client session payloads.
+- Supabase runtime configuration is centralized. Environment variables remain the preferred override, while the dedicated project's public URL and publishable key are safe source defaults so inline preview deployments cannot lose connectivity when Vercel omits project runtime variables. Secret/service-role credentials are never source defaults.
 
 ### Authentication
 - Google OAuth is initiated through the server route `/auth/google`, not directly from browser-side Supabase JavaScript.
@@ -37,5 +38,5 @@ The existing SQLite/filesystem implementation is treated as a legacy source. Cut
 ### Canonical source and release path
 - `Ryan9876/devpak` is the canonical source repository. Application source must not be reconstructed from Vercel deployment artifacts during normal development.
 - Changes are developed on `parallax/...` branches, validated at a tier proportional to the boundary changed, preview-deployed once, then promoted after live acceptance.
-- Runtime dependencies are pinned. Environment-specific values are supplied outside source control; `.env.production` is not a source artifact.
+- Runtime dependencies are pinned. Secrets and private environment-specific values remain outside source control; `.env.production` is not a source artifact. Public project identifiers such as the Supabase URL/publishable key may have dedicated-project defaults when required for deployment reliability.
 - Validation tiers are change-aware: presentation-only, Room Model/domain, backend/auth/schema, and full architecture/build. Heavy database/security gates are not rerun for unrelated CSS-only edits.
