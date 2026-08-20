@@ -59,7 +59,10 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - Unsupported release invokes deterministic gravity to the nearest lower valid support. Collision resolution and support validity remain deterministic regardless of visual compositing quality.
 - Visual scale may change modestly with image-space depth to maintain perspective, but must not be presented as a measurement.
 - Scene preparation should be reusable and idempotent: once a localized clean background and exact-pixel cutout exist for the source photo/object calibration, pointer movement never requires image generation.
-- If the exact-pixel segmentation path is unavailable, a crop-based fallback may keep the interaction usable, but it is a temporary degradation state and should not be mistaken for target visual quality.
+- A calibrated Original with missing refined derivatives automatically enters **Preparing room objects…** before manipulation becomes available. The product should not ask the user to discover or understand a separate manual refinement step.
+- While automatic preparation is running, show the recognizable source photo and a concise preparation state; do not present the crude crop as though it were normal-quality manipulation.
+- If preparation fails, the crop-based renderer may keep interaction usable only as an explicitly labeled **Basic manipulation mode**. The degraded state must explain that refinement did not finish and provide a clear **Retry refinement** action.
+- Silent fallback is not acceptable. Users must be able to distinguish refined manipulation, active preparation, and degraded basic mode without understanding implementation details.
 
 ## Direct manipulation in Geometry
 - Picking up a movable object preserves the exact grab point; objects must not jump to the pointer center.
