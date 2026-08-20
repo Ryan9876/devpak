@@ -2,11 +2,13 @@
 
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanningProposal, RoomModel, RoomObject, WorkspaceMode } from '@/lib/room-model/types';
+import type { PhotoScene } from '@/lib/photo/types';
 import { deterministicProposal } from '@/lib/planning/deterministic';
 import { snapPoint, validatePlacement } from '@/lib/room-model/geometry';
 import { buildVerificationGate } from '@/lib/room-model/verification';
 import { createClient } from '@/lib/supabase/client';
 import MeasurementPanel from './MeasurementPanel';
+import PhotoWorkspace from './PhotoWorkspace';
 
 const copy: Record<WorkspaceMode, string> = {
   organize: 'Use the real room photo to explore a cleaner, more useful version of the space without changing the room itself.',
@@ -27,19 +29,24 @@ type DragFeedback = {
   conflict: string | null;
 };
 
+type PhotoCaptureContext = {
+  captureMethod?: string;
+  sourceAssetId?: string;
+  mode?: WorkspaceMode;
+  goal?: string;
+  model?: string;
+  generatedAt?: string;
+  scene?: PhotoScene;
+  sceneUpdatedAt?: string;
+  [key: string]: unknown;
+};
+
 type PhotoAsset = {
   id: string;
   object_path: string;
   mime_type: string;
   byte_length: number;
-  capture_context: {
-    captureMethod?: string;
-    sourceAssetId?: string;
-    mode?: WorkspaceMode;
-    goal?: string;
-    model?: string;
-    generatedAt?: string;
-  } | null;
+  capture_context: PhotoCaptureContext | null;
   created_at: string;
   signedUrl: string | null;
 };
@@ -86,6 +93,7 @@ export default function Studio({
   const visualProposals = useMemo(() => photoAssets.filter(isPhotoProposal), [photoAssets]);
   const sourcePhoto = sourcePhotos[0] ?? null;
   const activePhoto = photoAssets.find((asset) => asset.id === activePhotoId) ?? visualProposals[0] ?? sourcePhoto;
+  const photoScene = sourcePhoto?.capture_context?.scene ?? null;
 
   async function refreshRoom() {
     if (demo) return;
@@ -185,6 +193,29 @@ export default function Studio({
   useEffect(() => {
     void refreshPhotos();
   }, [room.id]);
+
+  async function persistPhotoScene(nextScene: PhotoScene) {
+    if (demo || !sourcePhoto) return;
+    const supabase = createClient();
+    const nextContext: PhotoCaptureContext = {
+      ...(sourcePhoto.capture_context ?? {}),
+      scene: nextScene,
+      sceneUpdatedAt: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('room_assets')
+      .update({ capture_context: nextContext })
+      .eq('id', sourcePhoto.id)
+      .eq('owner_id', ownerId);
+    if (error) {
+      setPhotoStatus(`Position not saved: ${error.message}`);
+      return;
+    }
+    setPhotoAssets((current) => current.map((asset) => (
+      asset.id === sourcePhoto.id ? { ...asset, capture_context: nextContext } : asset
+    )));
+    setPhotoStatus('Object position saved to this room photo.');
+  }
 
   async function uploadPhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -512,7 +543,18 @@ export default function Studio({
                 <div className="photo-workspace">
                   <div className="photo-frame">
                     {activePhoto?.signedUrl ? (
-                      <img src={activePhoto.signedUrl} alt={isPhotoProposal(activePhoto) ? `${modeLabel[activePhoto.capture_context?.mode ?? mode]} visual proposal` : 'Original room photo'} />
+                      photoScene && sourcePhoto.signedUrl ? (
+                        <PhotoWorkspace
+                          baseImageUrl={activePhoto.signedUrl}
+                          cropImageUrl={sourcePhoto.signedUrl}
+                          scene={photoScene}
+                          disabled={photoBusy}
+                          onSceneChanged={persistPhotoScene}
+                          onStatus={setPhotoStatus}
+                        />
+                      ) : (
+                        <img src={activePhoto.signedUrl} alt={isPhotoProposal(activePhoto) ? `${modeLabel[activePhoto.capture_context?.mode ?? mode]} visual proposal` : 'Original room photo'} />
+                      )
                     ) : (
                       <div className="photo-loading">Loading private room photo…</div>
                     )}
@@ -627,6 +669,13 @@ export default function Studio({
                 </button>
                 <p className="concept-note">Visual proposals edit the room photo. They do not change saved measurements, object coordinates, or build-readiness evidence.</p>
               </div>
+
+              {photoScene && (
+                <div className="status-card success">
+                  <b>Direct manipulation enabled</b><br />
+                  Touch the plant in the photo and drag it. Dresser items block invalid placements; unsupported drops settle onto the next lower surface.
+                </div>
+              )}
 
               {photoStatus && <div className="status-card workspace-status">{photoStatus}</div>}
 
