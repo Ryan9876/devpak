@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import './styles.css';
+import './photo-landing.css';
 
-export const metadata = { title: 'NestMetric', description: 'Plan spaces with verified dimensions.' };
+export const metadata = { title: 'NestMetric', description: 'Functional room photo augmentation with measured geometry underneath.' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
