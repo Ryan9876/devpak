@@ -1,8 +1,10 @@
+import { generateImage } from 'ai';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { WorkspaceMode } from '@/lib/room-model/types';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 type AssetRow = {
   id: string;
@@ -13,6 +15,12 @@ type AssetRow = {
 
 function sourcePhoto(asset: AssetRow) {
   return asset.capture_context?.captureMethod !== 'ai_photo_proposal';
+}
+
+function extensionFor(mediaType: string) {
+  if (mediaType === 'image/jpeg') return 'jpg';
+  if (mediaType === 'image/webp') return 'webp';
+  return 'png';
 }
 
 function buildPrompt(mode: WorkspaceMode, goal: string, roomName: string) {
@@ -27,10 +35,12 @@ function buildPrompt(mode: WorkspaceMode, goal: string, roomName: string) {
     `Edit this photograph of ${roomName} into a realistic NestMetric visual proposal.`,
     modeInstruction,
     `User goal: ${goal || 'Improve the usefulness of the room.'}`,
-    'Preserve the camera viewpoint, room shell, doors, windows, permanent architecture, lighting direction, and recognizable existing surfaces unless the user goal explicitly requires changing a non-structural finish.',
+    'Preserve the exact camera viewpoint and keep the photographed room recognizable.',
+    'Preserve the room shell, doors, windows, permanent architecture, perspective, scale, occlusion, lighting direction, and recognizable existing surfaces unless the user goal explicitly requires changing a non-structural finish.',
+    'Make the smallest believable functional changes needed to demonstrate the proposal.',
     'Do not convert the image into a floor plan, CAD drawing, diagram, collage, or mood board.',
-    'Keep perspective, scale, occlusion, shadows, and materials photorealistic. Make the smallest believable changes needed to demonstrate the proposal.',
-    'Do not add text, labels, measurement callouts, dimensions, watermarks, or UI to the image.',
+    'Do not add text, labels, measurement callouts, dimensions, watermarks, borders, or UI to the image.',
+    'Keep materials, shadows, depth, and object placement photorealistic and physically plausible.',
   ].join(' ');
 }
 
@@ -69,44 +79,40 @@ export async function POST(request: Request) {
   const source = ((assets ?? []) as AssetRow[]).find(sourcePhoto);
   if (!source) return NextResponse.json({ error: 'Add a room photo before generating a visual proposal.' }, { status: 400 });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Photo generation is not configured for this deployment.', code: 'photo_ai_not_configured' },
-      { status: 503 },
-    );
-  }
-
   const { data: sourceBlob, error: downloadError } = await supabase.storage.from('room-assets').download(source.object_path);
   if (downloadError || !sourceBlob) return NextResponse.json({ error: 'Unable to read the private room photo.' }, { status: 500 });
 
   const prompt = buildPrompt(mode, goal, room.name);
-  const form = new FormData();
-  form.append('model', process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2');
-  form.append('quality', 'medium');
-  form.append('size', 'auto');
-  form.append('image[]', sourceBlob, source.object_path.split('/').pop() || 'room-photo');
-  form.append('prompt', prompt);
+  const model = process.env.NESTMETRIC_IMAGE_MODEL || 'openai/gpt-image-2';
 
-  const imageResponse = await fetch('https://api.openai.com/v1/images/edits', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
-  const imageJson: any = await imageResponse.json().catch(() => null);
-  if (!imageResponse.ok) {
-    const message = imageJson?.error?.message || `Photo generation failed (${imageResponse.status}).`;
-    return NextResponse.json({ error: message }, { status: 502 });
+  let generated;
+  try {
+    const sourceBytes = new Uint8Array(await sourceBlob.arrayBuffer());
+    const result = await generateImage({
+      model,
+      prompt: {
+        text: prompt,
+        images: [sourceBytes],
+      },
+      providerOptions: {
+        openai: { quality: 'medium' },
+      },
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(55_000),
+    });
+    generated = result.image;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Photo generation failed.';
+    return NextResponse.json({ error: message, code: 'photo_ai_failed' }, { status: 502 });
   }
 
-  const base64 = imageJson?.data?.[0]?.b64_json;
-  if (!base64) return NextResponse.json({ error: 'Photo generation returned no image.' }, { status: 502 });
-
-  const bytes = Buffer.from(base64, 'base64');
-  const objectPath = `${ownerId}/${roomId}/proposals/${crypto.randomUUID()}.png`;
-  const proposalBlob = new Blob([bytes], { type: 'image/png' });
+  const bytes = Buffer.from(generated.uint8Array);
+  const mediaType = generated.mediaType || 'image/png';
+  const extension = extensionFor(mediaType);
+  const objectPath = `${ownerId}/${roomId}/proposals/${crypto.randomUUID()}.${extension}`;
+  const proposalBlob = new Blob([bytes], { type: mediaType });
   const { error: uploadError } = await supabase.storage.from('room-assets').upload(objectPath, proposalBlob, {
-    contentType: 'image/png',
+    contentType: mediaType,
     upsert: false,
   });
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
@@ -117,14 +123,15 @@ export async function POST(request: Request) {
       room_id: roomId,
       owner_id: ownerId,
       object_path: objectPath,
-      mime_type: 'image/png',
+      mime_type: mediaType,
       byte_length: bytes.byteLength,
       capture_context: {
         captureMethod: 'ai_photo_proposal',
         sourceAssetId: source.id,
         mode,
         goal,
-        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
+        model,
+        gateway: 'vercel_ai_gateway',
         generatedAt: new Date().toISOString(),
       },
     })
