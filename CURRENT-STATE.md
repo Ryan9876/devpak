@@ -1,14 +1,14 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; the first photo viewport zoom/pan Preview did not engage reliably on iPhone, and the corrected native-iOS pinch plus persistent zoom-control implementation is now build-validated in a READY Preview with live iPhone acceptance pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; mobile viewport zoom/pan is build-validated; Object Interaction v4 now adopts FormShift-style object-owned selection/drag responders and is build-validated in a READY Preview with live iPhone acceptance pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`.
 - Canonical `main` remains unchanged by this work.
-- Active feature branch for this interaction pass: `parallax/photo-viewport-zoom-pan`, created from `parallax/photo-manipulation-v3`.
-- Corrected iOS zoom runtime commit validated in the current Preview: `f94aa3770cdc39f57f6a29505a85c67895aa0af4`.
-- Subsequent authoritative-record commits do not change that validated runtime package.
+- Active feature branch: `parallax/object-interaction-v4`, created from `parallax/photo-viewport-zoom-pan`.
+- Object Interaction v4 runtime commit validated in the current Preview: `fdf291174f0f994f8782ec4bc28b214d816d722a`.
+- Subsequent commits on the same branch update authoritative records only and do not change the validated runtime package.
 - Temporary Vercel bootstrap files are deployment-only and are not canonical source artifacts.
 
 ### Durable product direction — 2026-08-20
@@ -58,41 +58,43 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Visual Proposals are explicitly view-only and direct users back to `Original` for manipulation.
 - Live v3 derivative preparation and final edge/background visual-quality acceptance remain pending. The most recent user screenshot still showed `Direct manipulation`, indicating the fallback layer rather than a completed refined v3 derivative set.
 
-### Photo viewport zoom/pan pass
-- Pure viewport helper: `src/lib/photo/viewport.ts`.
+### Photo viewport zoom/pan
 - Viewport state is `{scale, tx, ty}` with clamped zoom range `1x..5x` and a `2.5x` double-tap target.
 - Zoom and pan operate above the normalized photo-scene model; they do not mutate support surfaces, collision footprints, gravity, measurements, or persisted scene coordinates.
-- Screen touches are inverse-transformed through the viewport before object drag/physics calculations, preserving normalized photo-space correctness while zoomed and panned.
-- Gesture priority remains explicit:
-  - two fingers own pinch zoom/pan;
-  - one finger beginning on a movable object owns object manipulation;
-  - one finger on empty photo space pans only when zoomed;
-  - double-tap empty photo space toggles `1x` / `2.5x`.
-- A second finger appearing during an object drag cancels/reverts that object move and transfers control to the viewport gesture.
-- A simple object tap does not generate a persistence write.
-- Small objects receive a minimum 44px invisible interaction target without changing their visible segmentation, scene footprint, or rendered size.
-- **Live iPhone diagnosis:** the first Pointer-Event-only zoom implementation built correctly but did not engage reliably in the user's iPhone test. The screenshot/footer remained at `1x`, so the first viewport Preview is not accepted for mobile zoom.
-- The corrected implementation adds native `touchstart` / `touchmove` / `touchend` / `touchcancel` listeners with `passive:false` for iOS multi-touch. Native pinch cancels any in-progress object drag, anchors zoom at the two-finger midpoint, and leaves scene physics untouched.
-- Pointer Events remain available for object dragging, desktop interaction, panning, and as a secondary pinch path where supported.
-- A persistent compact `− / live scale / +` control is now available even at `1x`; Reset appears above `1x`. This provides a guaranteed zoom path when browser gesture delivery is unreliable.
+- Screen touches are inverse-transformed through the viewport before object drag/physics calculations.
+- iOS/Safari uses native non-passive touch listeners for pinch because the earlier Pointer-Event-only pinch path did not engage reliably in live iPhone testing.
+- Pointer Events remain available for desktop navigation and object interaction.
+- A persistent compact `− / live scale / +` control is available even at `1x`; Reset appears above `1x` as a guaranteed fallback to browser gesture delivery.
+- Existing viewport validation covers inverse coordinate mapping, anchored zoom, and translation clamping.
 
-### Current corrected iOS zoom Preview — build validated
+### Object Interaction v4 — FormShift-derived responder model
+- FormShift review showed that its reliable selection comes primarily from **per-object gesture ownership**, not a more complex global hit-test algorithm.
+- NestMetric now separates object rendering from object interaction. The visible photo object is non-interactive; a dedicated transparent responder is positioned over each movable object's photo-space footprint.
+- The responder selects and claims a one-finger gesture immediately on pointer-down. The photo canvas no longer uses `target.closest('[data-photo-item-id]')` or other DOM-ancestry heuristics to decide which object the user intended to touch.
+- The responder keeps at least a 44px screen-space hit target. The CSS-space minimum is divided by current viewport scale so zoom does not inflate the hit region into an oversized screen-space target.
+- Object movement now records the original box and normalized starting pointer once, then computes position from pointer delta via `src/lib/photo/interaction.ts`. This mirrors FormShift's start-position + gesture-delta behavior while preserving NestMetric's normalized photo coordinates.
+- A simple tap selects but does not persist. Drag movement is transient/local until release; a successful release performs one durable scene write.
+- Invalid release reverts to the starting state. Unsupported release continues through NestMetric's deterministic gravity resolver, so v4 keeps NestMetric's stronger support/collision/gravity behavior.
+- The canvas now owns only viewport concerns: pinch, empty-space pan, double-tap zoom, and explicit zoom controls.
+- Native two-finger touch still overrides an active object responder on iOS: the object move is cancelled/reverted and viewport pinch takes over without persisting the cancelled move.
+- Live iPhone acceptance of the new responder selection feel is still pending.
+
+### Current Object Interaction v4 Preview — build validated
 - Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`).
-- Deployment: `dpl_2VJLiKSxn7prqRiVm6EnwTm95arZ`.
-- URL: `https://nestmetric-r1k6kcsmb-lew7.vercel.app`.
+- Deployment: `dpl_BLZvoshathdFPLcHXEfxXmtGoLAa`.
+- URL: `https://nestmetric-agvzbrdrb-lew7.vercel.app`.
 - State: `READY`.
 - Preview only; production aliases were not changed.
-- Deployment bootstrapped immutable runtime commit `f94aa3770cdc39f57f6a29505a85c67895aa0af4`.
-- Bootstrap verification confirmed native touch listener registration and the persistent zoom controls were present before validation.
-- Domain validation passed `9/9`: the existing six Room Model/photo support/collision/gravity tests plus three viewport tests covering inverse coordinate mapping, anchored zoom, and translation clamping.
+- Deployment bootstrapped immutable runtime commit `fdf291174f0f994f8782ec4bc28b214d816d722a`.
+- Bootstrap verification required the object-level pointer handlers and pointer-delta helper and rejected the old canvas DOM-search selection path.
+- Domain validation passed `10/10`: existing Room Model/photo support/collision/gravity tests, three viewport tests, and a new object-drag delta test confirming motion follows pointer delta without recentering.
 - Next.js `16.3.1` production compilation passed.
 - TypeScript passed.
 - Built routes include `/api/ai/photo-scene-assets`, `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- A prior corrected-build attempt failed TypeScript nullability checks in the native touch listener closure and was not accepted/deployed for user testing; the issue was fixed before this READY Preview.
-- Live iPhone acceptance for native pinch, `+ / −`, pan, double-tap, Reset, and object dragging while zoomed is still pending.
+- `npm install` surfaced one high-severity dependency advisory during Preview validation. Object Interaction v4 did not modify package dependencies, so this is a separate dependency-audit item and not introduced by the v4 interaction change.
 
 ### Production state
-The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/viewport acceptance and explicit promotion authorization.
+The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/viewport/object-interaction acceptance and explicit promotion authorization.
 
 ### Known platform constraints
 - Vercel project-level framework configuration still reports `framework: null`; Preview deployments explicitly supply a Next.js framework override.
