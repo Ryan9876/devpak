@@ -19,6 +19,15 @@ NestMetric uses one canonical Room Model across web capture, optional iOS/LiDAR 
 - AI may propose layouts/designs but does not bypass deterministic feasibility checks.
 - Build plans remain gated until required dimensional evidence is verified or explicitly corrected by the user.
 
+### Build artifacts
+- Build requests supply the desired build type, overall dimensions and material preference; image-derived estimates do not silently become construction dimensions.
+- The deterministic Build generator requires verified/corrected wall width and wall depth evidence before generation.
+- Candidate placement is checked against the same Room Model geometry/opening/fixed-object boundary used by Arrange.
+- Generated artifacts contain overall dimensions, placement, clearances, component dimensions, material quantities/waste allowance, assumptions, verification snapshot, and nonbinding cost/effort ranges.
+- A conflicted build may be saved for iteration but is explicitly not presented as ready.
+- Durable build artifacts are stored in owner-scoped `build_plans`; the verification snapshot preserves the dimensional evidence used when the plan was generated.
+- AI may later enrich design intent or alternatives, but deterministic dimensions, evidence gating and conflict validation remain authoritative.
+
 ### Persistence / ownership
 - Owner-scoped relational rows are protected with RLS.
 - Room photos/assets use a private Storage bucket whose object path is rooted by authenticated user id.
