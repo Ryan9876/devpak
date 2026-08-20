@@ -1,7 +1,7 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; refined Geometry interaction live-accepted by the user; photo-first Studio implemented and build-validated in a READY Preview; private source-photo upload and reload persistence acceptance passed; sign-in persistence and AI visual-proposal acceptance still pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; refined Geometry interaction live-accepted by the user; photo-first Studio implemented and build-validated in a READY Preview; private source-photo upload, reload persistence, and sign-out/sign-in persistence acceptance passed; AI visual-proposal acceptance still pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
@@ -57,7 +57,8 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Storage bucket `room-assets` is confirmed `public=false`, has a `15 MiB` limit, and permits JPEG/PNG/WebP/HEIC.
 - Current room asset classification is `1` source photo and `0` AI visual proposals.
 - Live browser reload acceptance passed: the original private source photo reappeared after a Studio page reload, confirming UI reload persistence from durable storage rather than transient local state.
-- This closes the private upload/storage-object linkage and page-reload persistence gates. Remaining photo persistence acceptance: confirm the source image survives sign-out/sign-in.
+- Live sign-out/sign-in acceptance passed: after ending the authenticated session and signing back in with Google, the same private source photo reappeared in Studio under the same account/room.
+- This closes the private source-photo durability gate across upload, durable storage linkage, page reload, and account re-authentication.
 
 ### Photo proposal generation path
 - New authenticated route: `/api/ai/photo-proposal`.
@@ -77,7 +78,7 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Production compile passed.
 - TypeScript passed.
 - Built routes include `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- Live acceptance still required for: photo persistence across sign-out/sign-in and AI visual proposal generation/private persistence.
+- Live acceptance still required for: AI visual proposal generation/private persistence.
 
 ### Production state
 The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first work is **not production-promoted**. Production promotion remains gated on live photo-first acceptance plus the remaining authenticated persistence checks and explicit promotion authorization.
