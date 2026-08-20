@@ -23,7 +23,18 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 - Vercel-hosted AI Gateway requests use deployment identity/OIDC rather than an OpenAI API key embedded in application configuration. Provider credentials are not committed to source or exposed to the browser. A local/non-Vercel development environment may use an explicitly configured Gateway credential when needed.
 - Reference-image prompts preserve camera viewpoint, room shell, perspective, scale, occlusion, lighting direction, and recognizable surfaces and explicitly reject CAD drawings, floor plans, labels, dimensions, watermarks, or UI in generated images.
 - Visual proposals do not mutate Room Model coordinates, measurements, constraints, or build-readiness evidence. The original image remains available as the stable comparison reference.
-- A top-down Room Model is not assumed to be calibrated to a perspective photograph. Any future object-level photo manipulation tied to measured coordinates requires an explicit photo-to-room calibration/projection contract rather than visually pretending the two coordinate systems already correspond.
+- A top-down Room Model is not assumed to be calibrated to a perspective photograph. Photo-space manipulation therefore uses an explicit image-space scene contract rather than pretending Room Model coordinates map directly into the photograph.
+
+### Photo scene interaction layer
+- Direct photo manipulation uses a source-photo-owned `PhotoScene` stored in that source asset's `capture_context.scene`. It is versioned independently from the measured Room Model and uses normalized image coordinates (`0..1`) so interactions remain stable across responsive rendering sizes.
+- A `PhotoScene` contains support-surface polygons, visual items, item support relationships, support-plane footprints, and calibration provenance. The current v1 calibration is manual; future vision/depth segmentation may emit the same contract as `vision_assisted` rather than creating a parallel interaction architecture.
+- Movable objects use a bottom-center support point and a support-plane footprint. Collision is evaluated between footprints on the same support surface, so soft visual extents such as plant leaves do not behave like rigid collision boxes.
+- Functional gravity is deterministic support resolution, not a general rigid-body physics engine. If a released item has no valid support at its current location, a vertical image-space ray resolves the next lower compatible surface; the item settles there at a perspective-adjusted visual scale or rejects when no valid landing exists.
+- Support surfaces have an explicit visual-depth order. Current examples include dresser top, bed, and floor. The system may therefore settle an object onto a bed before the floor when that is the nearest visible lower support.
+- Blocked placement may snap to the nearest clear position on the same surface; otherwise it reverts. Surface, blocker, and gravity feedback is contextual during the active drag and is not shown as persistent CAD-style markup.
+- Scene position changes persist only to the source photo's scene metadata and do not mutate Room Model measurements, object coordinates, constraints, or Build readiness.
+- Because generated photo proposals are required to preserve the source camera viewpoint, the source-photo scene calibration can be reused as an interaction overlay for aligned proposals. If a proposal materially changes viewpoint or scene topology, it must be treated as uncalibrated until a new projection/scene contract exists.
+- v1 visual object movement uses the source-photo crop as the draggable augmentation and masks/softens the source location. High-quality segmentation/inpainting is a future rendering refinement; it does not change the support/collision/gravity contract.
 
 ### Canonical Room Model
 - Integer micrometre coordinate system prevents floating-point drift in physical dimensions.
@@ -34,6 +45,7 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 
 ### Safety / feasibility boundary
 - Deterministic geometry validation is authoritative for bounds, clearances, openings, fixed-obstacle collisions, and snapping.
+- Deterministic photo-scene support/collision/gravity rules are authoritative for direct photo manipulation; AI imagery does not override them.
 - AI may propose visual outcomes/layouts/designs but does not bypass deterministic feasibility checks.
 - Photorealistic appearance is not evidence of dimensional accuracy.
 - Build plans remain gated until required dimensional evidence is verified or explicitly corrected by the user.
@@ -41,6 +53,7 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 ### Persistence / ownership
 - Owner-scoped relational rows are protected with RLS.
 - Room source photos and generated visual assets use a private Storage bucket whose object path is rooted by authenticated user id.
+- Source-photo scene metadata is persisted in the owner-scoped source asset row under `capture_context.scene`; photo manipulation does not require a new database table for v1.
 - Production application data must use Supabase PostgreSQL and private Storage; Vercel local filesystem storage is not an authoritative persistence layer.
 
 ### Migration
