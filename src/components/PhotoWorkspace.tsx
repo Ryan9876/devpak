@@ -5,6 +5,10 @@ import PhotoWorkspaceCore from './PhotoWorkspaceCore';
 
 type Props = ComponentProps<typeof PhotoWorkspaceCore>;
 type PreparationPhase = 'idle' | 'preparing' | 'failed';
+type PreparedAssets = {
+  backgroundImageUrl: string;
+  objectImageUrls: Record<string, string>;
+};
 
 const PREPARATION_TIMEOUT_MS = 115_000;
 
@@ -26,6 +30,7 @@ export default function PhotoWorkspace(props: Props) {
   const [phase, setPhase] = useState<PreparationPhase>('idle');
   const [failure, setFailure] = useState('');
   const [retryToken, setRetryToken] = useState(0);
+  const [preparedAssets, setPreparedAssets] = useState<PreparedAssets | null>(null);
   const attemptedKeyRef = useRef('');
 
   const movable = useMemo(
@@ -42,7 +47,7 @@ export default function PhotoWorkspace(props: Props) {
     : '';
 
   useEffect(() => {
-    if (refined || disabled || !canPrepare || !attemptKey) return;
+    if (refined || preparedAssets || disabled || !canPrepare || !attemptKey) return;
     if (attemptedKeyRef.current === attemptKey) return;
     attemptedKeyRef.current = attemptKey;
 
@@ -86,11 +91,21 @@ export default function PhotoWorkspace(props: Props) {
           throw new Error(prepared.error || 'Unable to prepare refined object manipulation.');
         }
 
+        const backgroundImageUrl = String(prepared.background?.signedUrl || '');
+        const objectImageUrl = String(prepared.object?.signedUrl || '');
+        if (!backgroundImageUrl || !objectImageUrl || !movable?.id) {
+          throw new Error('Refined room assets were created but could not be loaded.');
+        }
+
         if (cancelled) return;
+        setPreparedAssets({
+          backgroundImageUrl,
+          objectImageUrls: { [movable.id]: objectImageUrl },
+        });
+        setPhase('idle');
         onStatus?.(prepared.reused
           ? 'Refined room objects are ready.'
-          : 'Room objects prepared. Applying the refined photo layer…');
-        window.location.reload();
+          : 'Room objects prepared. Refined manipulation is ready.');
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof DOMException && error.name === 'AbortError'
@@ -110,7 +125,7 @@ export default function PhotoWorkspace(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [attemptKey, canPrepare, disabled, movable?.id, onStatus, refined, sourceObjectPath]);
+  }, [attemptKey, canPrepare, disabled, movable?.id, onStatus, preparedAssets, refined, sourceObjectPath]);
 
   function retry() {
     attemptedKeyRef.current = '';
@@ -119,8 +134,15 @@ export default function PhotoWorkspace(props: Props) {
     setRetryToken((value) => value + 1);
   }
 
-  if (refined || !canPrepare) {
-    return <PhotoWorkspaceCore {...props} />;
+  if (refined || preparedAssets || !canPrepare) {
+    return (
+      <PhotoWorkspaceCore
+        {...props}
+        backgroundImageUrl={preparedAssets?.backgroundImageUrl ?? props.backgroundImageUrl}
+        objectImageUrls={preparedAssets?.objectImageUrls ?? props.objectImageUrls}
+        refined={refined || Boolean(preparedAssets)}
+      />
+    );
   }
 
   return (
