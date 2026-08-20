@@ -144,6 +144,7 @@ export default function PhotoWorkspace({
     const current = sceneRef.current.items.find((item) => item.id === drag.itemId);
     if (!current) return;
 
+    event.preventDefault();
     const desired = clampBox({
       ...current.bbox,
       x: pointer.x - drag.offsetX,
@@ -204,6 +205,7 @@ export default function PhotoWorkspace({
           onPointerMove={moveDrag}
           onPointerUp={() => void finishDrag()}
           onPointerCancel={cancelDrag}
+          onContextMenu={(event) => event.preventDefault()}
         >
           <img className="photo-interaction-base" src={backgroundImageUrl} alt="Room photo" draggable={false} />
 
@@ -236,6 +238,7 @@ export default function PhotoWorkspace({
                   style={boxStyle(item.bbox)}
                   onPointerDown={(event) => startDrag(event, item)}
                   onClick={() => setSelectedId(item.id)}
+                  onContextMenu={(event) => event.preventDefault()}
                 >
                   {refined && cutoutUrl ? (
                     <span className="photo-object-cutout" aria-hidden="true">
