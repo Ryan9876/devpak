@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import './styles.css';
 import './projects.css';
 import './object-tools.css';
+import './evidence.css';
 
 export const metadata = { title: 'NestMetric', description: 'Plan spaces with verified dimensions.' };
 

@@ -1,7 +1,38 @@
 # NestMetric Current State
 
-## v0.2.5 project-scoped proposal history
+## v0.2.6 room evidence
 Status: **validated preview; canonical Git branch; not yet production-promoted.**
+
+### v0.2.6 changes
+- Private room captures are now visible inside the Studio after upload using short-lived signed Supabase Storage URLs.
+- Capture loading remains scoped by both authenticated `owner_id` and `room_id`.
+- Uploads reject non-image files and room photos larger than 15 MB before Storage writes begin.
+- Capture metadata records the guided web capture method, platform, user agent and capture timestamp.
+- Deletion is fail-safe: metadata is soft-marked, private Storage bytes are removed, the mark is rolled back if Storage deletion fails, and metadata is deleted only after byte deletion succeeds.
+- Measurement entry now distinguishes verified manual evidence from photo estimates.
+- Photo estimates are explicitly stored as `estimated` with lower confidence and wider tolerance.
+- Estimated measurements expose a user correction flow that records from/to values, timestamp and reason, then marks the evidence `corrected` with calibrated reference metadata.
+- Build gating continues to reject estimates and accepts only verified/corrected evidence.
+- Dedicated evidence styles preserve the current NestMetric visual language and collapse the capture gallery to one column on mobile.
+- Release validation now requires private signed capture URLs, file-size guarding, deletion handling, photo-estimate state and correction history.
+
+### v0.2.6 validation
+- Branch: `parallax/nestmetric-v0.2.6-evidence`
+- Preview deployment: `dpl_Dtr8g5a9Ewk9wNNVeUSssVEbG8AB`
+- Preview URL: `https://nestmetric-6s6mszw2x-lew7.vercel.app`
+- State: `READY`
+- Canonical source commit tested: `4d396aba356e65c2e8fb649147ac168f86507d19`
+- Full validation/build completed in about 15 seconds after source retrieval.
+- Release structure PASS with `roomEvidence: true`.
+- Strict TypeScript PASS.
+- Room Model domain tests: 4/4 PASS.
+- Room Model schema gate PASS.
+- Next.js 16.3.1 production build PASS.
+- Preview runtime error/fatal log scan: no findings.
+- Production alias has not been changed.
+
+## v0.2.5 project-scoped proposal history
+Status: **validated and merged to canonical `main`; production alias unchanged.**
 
 ### v0.2.5 changes
 - Planning requests are explicitly scoped to the active `projectId`; `/api/ai/plan` no longer selects the user's first room implicitly.
@@ -26,6 +57,7 @@ Status: **validated preview; canonical Git branch; not yet production-promoted.*
 - Room Model schema gate PASS.
 - Next.js 16.3.1 production build PASS, including `/api/proposals/[proposalId]/decision`.
 - Preview runtime error/fatal log scan: no findings.
+- PR #4 squash merge: `4d677b3ce52588a4f6a9df3a8febcaffdbf04051`.
 - Production alias has not been changed.
 
 ## v0.2.4 visual object tools
