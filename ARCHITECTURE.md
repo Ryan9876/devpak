@@ -8,6 +8,13 @@ NestMetric uses one canonical Room Model across web capture, optional iOS/LiDAR 
 - Supabase project `yyrpennpmwajlbepoemt` provides managed PostgreSQL, Auth, and private object Storage for the durable production backend.
 - Supabase SSR cookie clients are request-scoped; server authorization uses verified claims rather than trusting client session payloads.
 
+### Authentication
+- Google OAuth is initiated through the server route `/auth/google`, not directly from browser-side Supabase JavaScript.
+- The server-side Supabase SSR client creates the PKCE authorization flow and redirects the browser to Google through Supabase Auth.
+- Google returns to Supabase Auth, which redirects to NestMetric `/auth/callback`; that route exchanges the authorization code for the cookie-backed session before entering `/studio`.
+- Email magic-link authentication uses the same `/auth/callback` session boundary and remains a fallback path.
+- OAuth provider secrets live in Supabase provider configuration. Browser/runtime code receives only the Supabase project URL and publishable key.
+
 ### Canonical Room Model
 - Integer micrometre coordinate system prevents floating-point drift in physical dimensions.
 - Room bounds, openings, fixed objects, movable objects, assets, and measurement evidence share one coordinate contract.
