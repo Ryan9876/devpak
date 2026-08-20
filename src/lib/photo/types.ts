@@ -20,6 +20,13 @@ export type PhotoSceneItem = {
   kind: PhotoSceneItemKind;
   bbox: NormalizedBox;
   sourceBbox?: NormalizedBox;
+  /**
+   * Segmentation polygons normalized to the item's sourceBbox (0..1), not the
+   * full photograph. Multiple polygons are composited as a union so separate
+   * foliage/pot regions can preserve exact source pixels without a rectangle.
+   */
+  sourceMasks?: NormalizedPoint[][];
+  segmentation?: 'manual_polygon_v3' | 'vision_mask';
   supportSurfaceId: string | null;
   footprint: { width: number; height: number };
   draggable: boolean;
@@ -34,9 +41,9 @@ export type PhotoOccluder = {
 };
 
 export type PhotoScene = {
-  version: 1;
+  version: 1 | 2;
   coordinateSpace: 'normalized_image';
-  calibration: 'manual_v1' | 'vision_assisted';
+  calibration: 'manual_v1' | 'manual_v3' | 'vision_assisted';
   surfaces: PhotoSurface[];
   items: PhotoSceneItem[];
   occluders?: PhotoOccluder[];
