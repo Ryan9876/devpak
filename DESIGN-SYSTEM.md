@@ -17,21 +17,25 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - Proposal history uses lightweight thumbnails/filmstrip navigation with the original photo treated as the stable reference.
 - Generated imagery never implies measured accuracy by appearance alone. When Build precision matters, direct the user to verified measurements and Geometry.
 - Source-photo derivatives used for manipulation—background plates, exact-pixel cutouts, masks, or similar internal assets—must never appear as user-facing source photos or proposal-history entries.
+- Visual Proposals are explicitly **view-only** unless and until they receive their own calibration contract. The UI must say this directly rather than relying on the user to infer it.
+- When a proposal is active, the photo surface must direct the user back to **Original** for direct manipulation.
 
 ## Direct manipulation in Photo
 - Direct manipulation happens on the original calibrated room photo. Generated visual proposals remain view-only unless they receive their own explicit calibration contract later.
 - The live drag representation must preserve the photographed object's original pixels. AI-generated object recreations are not acceptable as the primary manipulation layer because they can change identity, texture, leaves, edges, lighting, or shape.
 - A movable object is extracted from the immutable source photo through an explicit segmentation mask and stored/rendered as a transparent exact-pixel cutout over a clean reconstructed background plate.
-- AI may prepare the clean background plate, but it does not render or recreate the object being dragged.
+- AI may prepare only the hidden-surface reconstruction needed behind the object. Whole-room regeneration is not an acceptable background-preparation strategy for direct manipulation.
+- The localized background-preparation mask should be slightly expanded/feathered around the object edge to remove source-edge remnants while preserving the rest of the photograph unchanged in content.
 - The original source image remains immutable. Removing an object from its source location is represented by a separate background plate, never by destructive editing of the source asset.
 - Picking up an object preserves the exact touch/grab offset. The object follows the finger continuously without snapping while moving.
+- On touch devices, the photo manipulation surface suppresses native image callouts/context menus so long-press/drag is owned by NestMetric rather than Safari/OS image actions.
 - Support, collision, and gravity feedback may appear only while relevant. Support surfaces and blocker regions are interaction diagnostics, not permanent visual overlays.
 - A selected object uses only a restrained edge/halo effect derived from the object silhouette. Persistent object-name pills, rectangular selection boxes, corner handles, or CAD-like controls are not part of the normal photo state.
 - A placed object receives a subtle contact shadow appropriate to its support surface. Shadows support visual grounding but do not imply physical simulation accuracy.
 - Foreground occlusion should preserve scene depth when a moved object belongs behind a photographed foreground element. Occlusion masks remain invisible to the user.
 - Unsupported release invokes deterministic gravity to the nearest lower valid support. Collision resolution and support validity remain deterministic regardless of visual compositing quality.
 - Visual scale may change modestly with image-space depth to maintain perspective, but must not be presented as a measurement.
-- Scene preparation should be reusable and idempotent: once a clean background and exact-pixel cutout exist for the source photo/object calibration, pointer movement never requires image generation.
+- Scene preparation should be reusable and idempotent: once a localized clean background and exact-pixel cutout exist for the source photo/object calibration, pointer movement never requires image generation.
 - If the exact-pixel segmentation path is unavailable, a crop-based fallback may keep the interaction usable, but it is a temporary degradation state and should not be mistaken for target visual quality.
 
 ## Direct manipulation in Geometry
