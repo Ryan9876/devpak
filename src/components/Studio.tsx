@@ -4,6 +4,7 @@ import type { PlanningProposal, RoomModel, RoomObject, WorkspaceMode } from '@/l
 import { deterministicProposal } from '@/lib/planning/deterministic';
 import { snapPoint, validatePlacement } from '@/lib/room-model/geometry';
 import { buildVerificationGate } from '@/lib/room-model/verification';
+import { changedObjectIds, cloneLayout, layoutChanged, type LayoutHistoryEntry } from '@/lib/room-model/history';
 import { createClient } from '@/lib/supabase/client';
 import CapturePanel from './CapturePanel';
 import MeasurementPanel from './MeasurementPanel';
@@ -21,9 +22,15 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
   const [proposal, setProposal] = useState<PlanningProposal | null>(null);
   const [goal, setGoal] = useState('Improve storage and keep a clear path through the room.');
   const [status, setStatus] = useState('');
+  const [history, setHistory] = useState<LayoutHistoryEntry[]>([]);
+  const [future, setFuture] = useState<LayoutHistoryEntry[]>([]);
+  const [compare, setCompare] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const baseline = useRef(cloneLayout(initialRoom.objects));
   const canvas = useRef<HTMLDivElement>(null);
   const selectedObject = room.objects.find((x) => x.id === selected);
   const gate = useMemo(() => buildVerificationGate(room, ['wall width', 'wall depth']), [room]);
+  const comparisonIds = useMemo(() => new Set(changedObjectIds(baseline.current, room.objects)), [room.objects]);
 
   async function refresh() {
     if (demo) return;
@@ -46,26 +53,105 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
     }));
   }
 
-  async function persist(obj: RoomObject) {
-    if (demo) {
-      setRoom((x) => ({ ...x, objects: x.objects.map((o) => o.id === obj.id ? obj : o) }));
-      return true;
-    }
-    const supabase = createClient();
-    const { error } = await supabase.from('room_objects').update({
+  function objectRow(obj: RoomObject) {
+    return {
+      id: obj.id,
+      room_id: room.id,
+      owner_id: ownerId,
+      label: obj.label,
+      kind: obj.kind,
       x_um: obj.position.xUm,
       y_um: obj.position.yUm,
-      rotation_deg: obj.rotationDeg,
       width_um: obj.size.widthUm,
       depth_um: obj.size.depthUm,
+      rotation_deg: obj.rotationDeg,
+      fixed: obj.fixed,
+      clearance_um: obj.clearanceUm,
+      source: obj.source,
+      confidence: obj.confidence ?? null,
+      notes: obj.notes ?? null,
       updated_at: new Date().toISOString(),
-    }).eq('id', obj.id).eq('owner_id', ownerId);
-    if (error) {
-      setStatus(error.message);
+    };
+  }
+
+  async function syncLayout(current: RoomObject[], target: RoomObject[]) {
+    if (demo) return true;
+    const changedIds = new Set(changedObjectIds(current, target));
+    if (changedIds.size === 0) return true;
+    const targetIds = new Set(target.map((object) => object.id));
+    const changedRows = target.filter((object) => changedIds.has(object.id)).map(objectRow);
+    const removedIds = current.filter((object) => changedIds.has(object.id) && !targetIds.has(object.id)).map((object) => object.id);
+    const supabase = createClient();
+
+    if (changedRows.length) {
+      const { error } = await supabase.from('room_objects').upsert(changedRows, { onConflict: 'id' });
+      if (error) {
+        setStatus(error.message);
+        return false;
+      }
+    }
+    if (removedIds.length) {
+      const { error } = await supabase.from('room_objects').delete().eq('room_id', room.id).eq('owner_id', ownerId).in('id', removedIds);
+      if (error) {
+        setStatus(`${error.message} Refreshing server state.`);
+        await refresh();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function layoutConflicts(objects: RoomObject[]) {
+    const model = { ...room, objects };
+    return objects.flatMap((object) => validatePlacement(model, object));
+  }
+
+  async function commitLayout(label: string, before: RoomObject[], after: RoomObject[]) {
+    if (!layoutChanged(before, after)) return true;
+    const conflicts = layoutConflicts(after);
+    if (conflicts.length) {
+      setStatus(conflicts[0]);
       return false;
     }
-    setRoom((x) => ({ ...x, objects: x.objects.map((o) => o.id === obj.id ? obj : o) }));
+    if (!await syncLayout(before, after)) return false;
+    const entry: LayoutHistoryEntry = { label, before: cloneLayout(before), after: cloneLayout(after) };
+    setHistory((items) => [...items, entry].slice(-50));
+    setFuture([]);
+    setRoom((value) => ({ ...value, objects: cloneLayout(after) }));
+    setStatus(`${label} saved.`);
     return true;
+  }
+
+  async function undo() {
+    const entry = history[history.length - 1];
+    if (!entry || historyBusy) return;
+    setHistoryBusy(true);
+    try {
+      if (!await syncLayout(room.objects, entry.before)) return;
+      setRoom((value) => ({ ...value, objects: cloneLayout(entry.before) }));
+      setHistory((items) => items.slice(0, -1));
+      setFuture((items) => [entry, ...items]);
+      setSelected((id) => entry.before.some((object) => object.id === id) ? id : (entry.before.find((object) => !object.fixed)?.id ?? entry.before[0]?.id ?? ''));
+      setStatus(`Undid: ${entry.label}.`);
+    } finally {
+      setHistoryBusy(false);
+    }
+  }
+
+  async function redo() {
+    const entry = future[0];
+    if (!entry || historyBusy) return;
+    setHistoryBusy(true);
+    try {
+      if (!await syncLayout(room.objects, entry.after)) return;
+      setRoom((value) => ({ ...value, objects: cloneLayout(entry.after) }));
+      setHistory((items) => [...items, entry].slice(-50));
+      setFuture((items) => items.slice(1));
+      setSelected((id) => entry.after.some((object) => object.id === id) ? id : (entry.after.find((object) => !object.fixed)?.id ?? entry.after[0]?.id ?? ''));
+      setStatus(`Redid: ${entry.label}.`);
+    } finally {
+      setHistoryBusy(false);
+    }
   }
 
   function findOpenPlacement(seed: RoomObject) {
@@ -100,24 +186,11 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
       setStatus('No valid open placement was found for those dimensions.');
       return;
     }
-    if (demo) {
-      setRoom((x) => ({ ...x, objects: [...x.objects, placed] }));
-    } else {
-      const supabase = createClient();
-      const { error } = await supabase.from('room_objects').insert({
-        id: placed.id, room_id: room.id, owner_id: ownerId, label: placed.label, kind: placed.kind,
-        x_um: placed.position.xUm, y_um: placed.position.yUm, width_um: placed.size.widthUm, depth_um: placed.size.depthUm,
-        rotation_deg: placed.rotationDeg, fixed: false, clearance_um: placed.clearanceUm, source: 'user', confidence: 1,
-      });
-      if (error) {
-        setStatus(error.message);
-        return;
-      }
-      setRoom((x) => ({ ...x, objects: [...x.objects, placed] }));
+    const after = [...room.objects, placed];
+    if (await commitLayout(`Added ${label}`, room.objects, after)) {
+      setSelected(placed.id);
+      form.reset();
     }
-    setSelected(placed.id);
-    setStatus(`${label} added${demo ? '' : ' and saved'}.`);
-    form.reset();
   }
 
   async function resizeSelected(event: FormEvent<HTMLFormElement>) {
@@ -131,23 +204,15 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
       return;
     }
     const next = { ...selectedObject, size: { widthUm: Math.round(widthMm * 1000), depthUm: Math.round(depthMm * 1000) } };
-    const conflicts = validatePlacement(room, next);
-    if (conflicts.length) {
-      setStatus(conflicts[0]);
-      return;
-    }
-    if (await persist(next)) setStatus('Object dimensions saved.');
+    const after = room.objects.map((object) => object.id === next.id ? next : object);
+    await commitLayout(`Resized ${next.label}`, room.objects, after);
   }
 
   async function rotateSelected(delta: number) {
     if (!selectedObject || selectedObject.fixed) return;
     const next = { ...selectedObject, rotationDeg: (selectedObject.rotationDeg + delta + 360) % 360 };
-    const conflicts = validatePlacement(room, next);
-    if (conflicts.length) {
-      setStatus(conflicts[0]);
-      return;
-    }
-    if (await persist(next)) setStatus(`Rotation saved at ${next.rotationDeg}°.`);
+    const after = room.objects.map((object) => object.id === next.id ? next : object);
+    await commitLayout(`Rotated ${next.label}`, room.objects, after);
   }
 
   async function deleteSelected() {
@@ -155,41 +220,35 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
       setStatus('Fixed elements are protected.');
       return;
     }
-    const remaining = room.objects.filter((o) => o.id !== selectedObject.id);
-    if (!demo) {
-      const supabase = createClient();
-      const { error } = await supabase.from('room_objects').delete().eq('id', selectedObject.id).eq('owner_id', ownerId);
-      if (error) {
-        setStatus(error.message);
-        return;
-      }
+    const after = room.objects.filter((object) => object.id !== selectedObject.id);
+    if (await commitLayout(`Removed ${selectedObject.label}`, room.objects, after)) {
+      setSelected(after.find((object) => !object.fixed)?.id ?? after[0]?.id ?? '');
     }
-    setRoom((x) => ({ ...x, objects: x.objects.filter((o) => o.id !== selectedObject.id) }));
-    setSelected(remaining.find((o) => !o.fixed)?.id ?? remaining[0]?.id ?? '');
-    setStatus(`${selectedObject.label} removed from the Room Model.`);
   }
 
   function drag(e: PointerEvent<HTMLDivElement>, obj: RoomObject) {
     if (obj.fixed || !canvas.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const bounds = canvas.current.getBoundingClientRect();
+    const before = cloneLayout(room.objects);
     let latestValid = obj;
     const move = (ev: globalThis.PointerEvent) => {
       const x = (ev.clientX - bounds.left) / bounds.width * room.boundary.widthUm - obj.size.widthUm / 2;
       const y = (ev.clientY - bounds.top) / bounds.height * room.boundary.depthUm - obj.size.depthUm / 2;
       const next = { ...obj, position: snapPoint({ xUm: Math.round(x), yUm: Math.round(y) }) };
-      const conflicts = validatePlacement(room, next);
+      const conflicts = validatePlacement({ ...room, objects: before }, next);
       setStatus(conflicts[0] ?? 'Placement is clear.');
       if (!conflicts.length) {
         latestValid = next;
-        setRoom((r) => ({ ...r, objects: r.objects.map((o) => o.id === obj.id ? next : o) }));
+        setRoom((value) => ({ ...value, objects: value.objects.map((object) => object.id === obj.id ? next : object) }));
       }
     };
     const up = async () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      if (latestValid.position.xUm !== obj.position.xUm || latestValid.position.yUm !== obj.position.yUm) {
-        if (await persist(latestValid)) setStatus('Placement saved.');
+      const after = before.map((object) => object.id === obj.id ? latestValid : object);
+      if (!await commitLayout(`Moved ${obj.label}`, before, after)) {
+        setRoom((value) => ({ ...value, objects: before }));
       }
     };
     window.addEventListener('pointermove', move);
@@ -217,21 +276,11 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
 
   async function accept() {
     if (!proposal) return;
-    const changed = room.objects.map((o) => {
-      const p = proposal.placements.find((x) => x.objectId === o.id);
-      return p ? { ...o, position: p.position, rotationDeg: p.rotationDeg } : o;
+    const changed = room.objects.map((object) => {
+      const placement = proposal.placements.find((item) => item.objectId === object.id);
+      return placement ? { ...object, position: placement.position, rotationDeg: placement.rotationDeg } : object;
     });
-    const conflicts = changed.flatMap((o) => validatePlacement({ ...room, objects: changed }, o));
-    if (conflicts.length) {
-      setStatus(conflicts[0]);
-      return;
-    }
-    for (const o of changed) {
-      const before = room.objects.find((x) => x.id === o.id);
-      if (o.position.xUm !== before?.position.xUm || o.position.yUm !== before?.position.yUm || o.rotationDeg !== before?.rotationDeg) await persist(o);
-    }
-    setProposal(null);
-    setStatus('Proposal applied to the Room Model.');
+    if (await commitLayout(`Applied ${mode} proposal`, room.objects, changed)) setProposal(null);
   }
 
   const scaleX = (v: number) => `${v / room.boundary.widthUm * 100}%`;
@@ -240,13 +289,13 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
   return <main className="studio-page">
     <div className="studio-top">
       <div className="studio-title"><a className="studio-project-link" href="/projects">← Projects</a><h1>{room.name} Studio</h1><p>One Room Model · {room.objects.length} objects · {room.measurements.length} measurements {demo && <span className="demo-pill">demo data</span>}</p></div>
-      <div className="mode-switch" aria-label="Workspace mode">{(['organize', 'arrange', 'build'] as WorkspaceMode[]).map((x) => <button key={x} className={mode === x ? 'active' : ''} onClick={() => { setMode(x); setProposal(null); }}>{x[0].toUpperCase() + x.slice(1)}</button>)}</div>
+      <div className="mode-switch" aria-label="Workspace mode">{(['organize', 'arrange', 'build'] as WorkspaceMode[]).map((value) => <button key={value} className={mode === value ? 'active' : ''} onClick={() => { setMode(value); setProposal(null); }}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div>
     </div>
     <div className="studio-grid">
       <aside className="panel tool-panel">
         <div className="mode-copy">{copy[mode]}</div>
         <h2>Room objects</h2>
-        <div className="tool-list">{room.objects.map((o) => <button key={o.id} className={selected === o.id ? 'active' : ''} onClick={() => setSelected(o.id)}>{o.label}{o.fixed ? ' · fixed' : ''}</button>)}</div>
+        <div className="tool-list">{room.objects.map((object) => <button key={object.id} className={selected === object.id ? 'active' : ''} onClick={() => setSelected(object.id)}>{object.label}{object.fixed ? ' · fixed' : ''}</button>)}</div>
         <form className="object-add-form" onSubmit={addObject}>
           <h2>Add object</h2>
           <label>Label<input name="label" placeholder="Accent chair" required /></label>
@@ -257,10 +306,15 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
         <MeasurementPanel ownerId={ownerId} roomId={room.id} measurements={room.measurements} onChanged={refresh} />
       </aside>
       <section className="panel canvas-panel">
-        <div className="canvas-toolbar"><span>{Math.round(room.boundary.widthUm / 1000)} × {Math.round(room.boundary.depthUm / 1000)} mm</span><span>50 mm snap · fixed constraints protected</span></div>
+        <div className="canvas-toolbar history-toolbar">
+          <div><span>{Math.round(room.boundary.widthUm / 1000)} × {Math.round(room.boundary.depthUm / 1000)} mm</span><span className="canvas-rule">50 mm snap · fixed constraints protected</span></div>
+          <div className="history-actions"><button className="small-button" onClick={undo} disabled={!history.length || historyBusy}>Undo</button><button className="small-button" onClick={redo} disabled={!future.length || historyBusy}>Redo</button><button className={`small-button${compare ? ' compare-active' : ''}`} onClick={() => setCompare((value) => !value)}>Compare</button></div>
+        </div>
+        {compare && <div className="compare-legend"><span><i className="before-swatch" /> Before</span><span><i className="current-swatch" /> Current</span><span>{comparisonIds.size} changed object{comparisonIds.size === 1 ? '' : 's'}</span></div>}
         <div className="room-canvas" ref={canvas}>
-          {room.openings.map((o) => <div key={o.id} className="opening-marker" title={`${o.kind} opening`} style={o.wall === 'south' || o.wall === 'north' ? { left: scaleX(o.offsetUm), width: scaleX(o.widthUm), height: 6, [o.wall === 'north' ? 'top' : 'bottom']: 0 } : { top: scaleY(o.offsetUm), height: scaleY(o.widthUm), width: 6, [o.wall === 'west' ? 'left' : 'right']: 0 }} />)}
-          {room.objects.map((o) => <div key={o.id} className={`canvas-object${o.fixed ? ' fixed' : ''}${selected === o.id ? ' selected' : ''}`} onPointerDown={(e) => drag(e, o)} onClick={() => setSelected(o.id)} style={{ left: scaleX(o.position.xUm), top: scaleY(o.position.yUm), width: scaleX(o.size.widthUm), height: scaleY(o.size.depthUm), transform: `rotate(${o.rotationDeg}deg)` }}>{o.label}</div>)}
+          {room.openings.map((opening) => <div key={opening.id} className="opening-marker" title={`${opening.kind} opening`} style={opening.wall === 'south' || opening.wall === 'north' ? { left: scaleX(opening.offsetUm), width: scaleX(opening.widthUm), height: 6, [opening.wall === 'north' ? 'top' : 'bottom']: 0 } : { top: scaleY(opening.offsetUm), height: scaleY(opening.widthUm), width: 6, [opening.wall === 'west' ? 'left' : 'right']: 0 }} />)}
+          {compare && baseline.current.filter((object) => comparisonIds.has(object.id)).map((object) => <div key={`before-${object.id}`} className="canvas-object compare-before" style={{ left: scaleX(object.position.xUm), top: scaleY(object.position.yUm), width: scaleX(object.size.widthUm), height: scaleY(object.size.depthUm), transform: `rotate(${object.rotationDeg}deg)` }}>{object.label}</div>)}
+          {room.objects.map((object) => <div key={object.id} className={`canvas-object${object.fixed ? ' fixed' : ''}${selected === object.id ? ' selected' : ''}${compare && comparisonIds.has(object.id) ? ' compare-current' : ''}`} onPointerDown={(e) => drag(e, object)} onClick={() => setSelected(object.id)} style={{ left: scaleX(object.position.xUm), top: scaleY(object.position.yUm), width: scaleX(object.size.widthUm), height: scaleY(object.size.depthUm), transform: `rotate(${object.rotationDeg}deg)` }}>{object.label}</div>)}
         </div>
       </section>
       <aside className="panel inspector">
@@ -279,9 +333,10 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
           </div>}
         </>}
         {mode === 'build' && <div className={`status-card ${gate.allowed ? '' : 'warning'}`}><b>{gate.allowed ? 'Build evidence ready' : 'Build evidence locked'}</b><br />{gate.allowed ? 'Required measurements are verified.' : `Missing: ${[...gate.missing, ...gate.unverified].join(', ') || 'verification'}`}</div>}
-        <label>Goal<input value={goal} onChange={(e) => setGoal(e.target.value)} /></label>
+        <label>Goal<input value={goal} onChange={(event) => setGoal(event.target.value)} /></label>
         <button className="button primary" onClick={propose}>Generate {mode} proposal</button>
-        {proposal && <div className="proposal-card"><h3>{proposal.title}</h3><p>{proposal.summary}</p><ul>{proposal.rationale.map((x) => <li key={x}>{x}</li>)}</ul>{proposal.conflicts.length > 0 && <p><b>Conflicts:</b> {proposal.conflicts.join(' ')}</p>}<button className="small-button dangerless" onClick={accept} disabled={proposal.conflicts.length > 0}>Apply proposal</button></div>}
+        {proposal && <div className="proposal-card"><h3>{proposal.title}</h3><p>{proposal.summary}</p><ul>{proposal.rationale.map((item) => <li key={item}>{item}</li>)}</ul>{proposal.conflicts.length > 0 && <p><b>Conflicts:</b> {proposal.conflicts.join(' ')}</p>}<button className="small-button dangerless" onClick={accept} disabled={proposal.conflicts.length > 0}>Apply proposal</button></div>}
+        {history.length > 0 && <div className="history-summary"><b>{history.length} change{history.length === 1 ? '' : 's'} this session</b><span>Last: {history[history.length - 1].label}</span></div>}
         {status && <div className="status-card">{status}</div>}
         {!demo && <form action="/auth/signout" method="post"><button className="small-button" type="submit">Sign out</button></form>}
       </aside>
