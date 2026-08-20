@@ -18,9 +18,10 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 
 ### Photo augmentation layer
 - Original room photos are private objects in the existing `room-assets` bucket and owner-scoped `room_assets` rows.
-- AI visual proposals are separate private assets, never replacements for source photos. Their `capture_context.captureMethod` is `ai_photo_proposal` and records the source asset, mode, goal, model, and generation time.
-- The server downloads the authenticated owner's private source photo, sends it to the image-edit provider, stores the generated result back into the same private owner-scoped asset domain, and returns only a short-lived signed URL to the client.
-- Provider credentials remain server-only. No AI provider secret is committed to source or exposed to the browser.
+- AI visual proposals are separate private assets, never replacements for source photos. Their `capture_context.captureMethod` is `ai_photo_proposal` and records the source asset, mode, goal, model, gateway, and generation time.
+- The server downloads the authenticated owner's private source photo and passes the image bytes as a reference image to AI SDK `generateImage()` using `openai/gpt-image-2` through Vercel AI Gateway. The generated result is stored back into the same private owner-scoped asset domain and only a short-lived signed URL is returned to the client.
+- Vercel-hosted AI Gateway requests use deployment identity/OIDC rather than an OpenAI API key embedded in application configuration. Provider credentials are not committed to source or exposed to the browser. A local/non-Vercel development environment may use an explicitly configured Gateway credential when needed.
+- Reference-image prompts preserve camera viewpoint, room shell, perspective, scale, occlusion, lighting direction, and recognizable surfaces and explicitly reject CAD drawings, floor plans, labels, dimensions, watermarks, or UI in generated images.
 - Visual proposals do not mutate Room Model coordinates, measurements, constraints, or build-readiness evidence. The original image remains available as the stable comparison reference.
 - A top-down Room Model is not assumed to be calibrated to a perspective photograph. Any future object-level photo manipulation tied to measured coordinates requires an explicit photo-to-room calibration/projection contract rather than visually pretending the two coordinate systems already correspond.
 
