@@ -91,17 +91,9 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
       return;
     }
     const seed: RoomObject = {
-      id: crypto.randomUUID(),
-      label,
-      kind: 'furniture',
-      position: { xUm: 0, yUm: 0 },
+      id: crypto.randomUUID(), label, kind: 'furniture', position: { xUm: 0, yUm: 0 },
       size: { widthUm: Math.round(widthMm * 1000), depthUm: Math.round(depthMm * 1000) },
-      rotationDeg: 0,
-      fixed: false,
-      clearanceUm: 50_000,
-      source: 'user',
-      confidence: 1,
-      notes: null,
+      rotationDeg: 0, fixed: false, clearanceUm: 50_000, source: 'user', confidence: 1, notes: null,
     };
     const placed = findOpenPlacement(seed);
     if (!placed) {
@@ -110,35 +102,21 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
     }
     if (demo) {
       setRoom((x) => ({ ...x, objects: [...x.objects, placed] }));
-      setSelected(placed.id);
-      setStatus(`${label} added to the Room Model.`);
-      form.reset();
-      return;
+    } else {
+      const supabase = createClient();
+      const { error } = await supabase.from('room_objects').insert({
+        id: placed.id, room_id: room.id, owner_id: ownerId, label: placed.label, kind: placed.kind,
+        x_um: placed.position.xUm, y_um: placed.position.yUm, width_um: placed.size.widthUm, depth_um: placed.size.depthUm,
+        rotation_deg: placed.rotationDeg, fixed: false, clearance_um: placed.clearanceUm, source: 'user', confidence: 1,
+      });
+      if (error) {
+        setStatus(error.message);
+        return;
+      }
+      setRoom((x) => ({ ...x, objects: [...x.objects, placed] }));
     }
-    const supabase = createClient();
-    const { error } = await supabase.from('room_objects').insert({
-      id: placed.id,
-      room_id: room.id,
-      owner_id: ownerId,
-      label: placed.label,
-      kind: placed.kind,
-      x_um: placed.position.xUm,
-      y_um: placed.position.yUm,
-      width_um: placed.size.widthUm,
-      depth_um: placed.size.depthUm,
-      rotation_deg: placed.rotationDeg,
-      fixed: false,
-      clearance_um: placed.clearanceUm,
-      source: 'user',
-      confidence: 1,
-    });
-    if (error) {
-      setStatus(error.message);
-      return;
-    }
-    setRoom((x) => ({ ...x, objects: [...x.objects, placed] }));
     setSelected(placed.id);
-    setStatus(`${label} added and saved.`);
+    setStatus(`${label} added${demo ? '' : ' and saved'}.`);
     form.reset();
   }
 
@@ -194,20 +172,25 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
   function drag(e: PointerEvent<HTMLDivElement>, obj: RoomObject) {
     if (obj.fixed || !canvas.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    const rect = canvas.current.getBoundingClientRect();
+    const bounds = canvas.current.getBoundingClientRect();
+    let latestValid = obj;
     const move = (ev: globalThis.PointerEvent) => {
-      const x = (ev.clientX - rect.left) / rect.width * room.boundary.widthUm - obj.size.widthUm / 2;
-      const y = (ev.clientY - rect.top) / rect.height * room.boundary.depthUm - obj.size.depthUm / 2;
+      const x = (ev.clientX - bounds.left) / bounds.width * room.boundary.widthUm - obj.size.widthUm / 2;
+      const y = (ev.clientY - bounds.top) / bounds.height * room.boundary.depthUm - obj.size.depthUm / 2;
       const next = { ...obj, position: snapPoint({ xUm: Math.round(x), yUm: Math.round(y) }) };
       const conflicts = validatePlacement(room, next);
       setStatus(conflicts[0] ?? 'Placement is clear.');
-      if (!conflicts.length) setRoom((r) => ({ ...r, objects: r.objects.map((o) => o.id === obj.id ? next : o) }));
+      if (!conflicts.length) {
+        latestValid = next;
+        setRoom((r) => ({ ...r, objects: r.objects.map((o) => o.id === obj.id ? next : o) }));
+      }
     };
     const up = async () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      const current = room.objects.find((o) => o.id === obj.id);
-      if (current) await persist(current);
+      if (latestValid.position.xUm !== obj.position.xUm || latestValid.position.yUm !== obj.position.yUm) {
+        if (await persist(latestValid)) setStatus('Placement saved.');
+      }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up, { once: true });
@@ -256,7 +239,7 @@ export default function Studio({ initialRoom, ownerId, demo = false }: { initial
 
   return <main className="studio-page">
     <div className="studio-top">
-      <div className="studio-title"><h1>{room.name} Studio</h1><p>One Room Model · {room.objects.length} objects · {room.measurements.length} measurements {demo && <span className="demo-pill">demo data</span>}</p></div>
+      <div className="studio-title"><a className="studio-project-link" href="/projects">← Projects</a><h1>{room.name} Studio</h1><p>One Room Model · {room.objects.length} objects · {room.measurements.length} measurements {demo && <span className="demo-pill">demo data</span>}</p></div>
       <div className="mode-switch" aria-label="Workspace mode">{(['organize', 'arrange', 'build'] as WorkspaceMode[]).map((x) => <button key={x} className={mode === x ? 'active' : ''} onClick={() => { setMode(x); setProposal(null); }}>{x[0].toUpperCase() + x.slice(1)}</button>)}</div>
     </div>
     <div className="studio-grid">
