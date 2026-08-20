@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
+const BACKGROUND_RENDER_MODE = 'localized_mask_inpaint_v3';
+const CUTOUT_RENDER_MODE = 'exact_source_mask_v3';
+
 type AssetRow = {
   id: string;
   object_path: string;
@@ -15,6 +18,14 @@ type AssetRow = {
   byte_length: number;
   capture_context: Record<string, unknown> | null;
   created_at: string;
+};
+
+type PixelRect = { left: number; top: number; width: number; height: number };
+
+type PreparedSource = {
+  bytes: Buffer;
+  width: number;
+  height: number;
 };
 
 function method(asset: AssetRow) {
@@ -54,33 +65,118 @@ async function signedAsset(supabase: Awaited<ReturnType<typeof createClient>>, a
   return { id: asset.id, signedUrl: data?.signedUrl ?? null, mimeType: asset.mime_type };
 }
 
-function sourceMaskSvg(item: PhotoSceneItem, width: number, height: number) {
+async function normalizeSource(sourceBytes: Uint8Array): Promise<PreparedSource> {
+  const normalized = await sharp(Buffer.from(sourceBytes))
+    .rotate()
+    .png()
+    .toBuffer({ resolveWithObject: true });
+  return { bytes: normalized.data, width: normalized.info.width, height: normalized.info.height };
+}
+
+function sourceRect(item: PhotoSceneItem, fullWidth: number, fullHeight: number): PixelRect {
+  const box = item.sourceBbox ?? item.bbox;
+  const left = Math.max(0, Math.round(box.x * fullWidth));
+  const top = Math.max(0, Math.round(box.y * fullHeight));
+  const width = Math.max(2, Math.min(fullWidth - left, Math.round(box.w * fullWidth)));
+  const height = Math.max(2, Math.min(fullHeight - top, Math.round(box.h * fullHeight)));
+  return { left, top, width, height };
+}
+
+function paddedRect(rect: PixelRect, fullWidth: number, fullHeight: number): PixelRect {
+  const padX = Math.max(28, Math.round(rect.width * 0.38));
+  const padY = Math.max(28, Math.round(rect.height * 0.34));
+  const left = Math.max(0, rect.left - padX);
+  const top = Math.max(0, rect.top - padY);
+  const right = Math.min(fullWidth, rect.left + rect.width + padX);
+  const bottom = Math.min(fullHeight, rect.top + rect.height + padY);
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+function maskSvg(
+  item: PhotoSceneItem,
+  source: PixelRect,
+  target: PixelRect,
+  options: { feather: number; stroke: number },
+) {
   const masks = item.sourceMasks ?? [];
   if (!masks.length) throw new Error('Exact source-pixel segmentation mask is missing.');
   const polygons = masks.map((polygon) => {
-    const points = polygon.map((point) => `${(point.x * width).toFixed(2)},${(point.y * height).toFixed(2)}`).join(' ');
-    return `<polygon points="${points}" fill="white"/>`;
+    const points = polygon.map((point) => {
+      const x = source.left + point.x * source.width - target.left;
+      const y = source.top + point.y * source.height - target.top;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    return `<polygon points="${points}" fill="white" stroke="white" stroke-width="${options.stroke}" stroke-linejoin="round"/>`;
   }).join('');
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><filter id="edge"><feGaussianBlur stdDeviation="0.45"/></filter></defs><g filter="url(#edge)">${polygons}</g></svg>`);
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${target.width}" height="${target.height}" viewBox="0 0 ${target.width} ${target.height}">` +
+    `<defs><filter id="edge"><feGaussianBlur stdDeviation="${options.feather}"/></filter></defs>` +
+    `<g filter="url(#edge)">${polygons}</g></svg>`,
+  );
 }
 
-async function exactCutout(sourceBytes: Uint8Array, item: PhotoSceneItem) {
-  const sourceBox = item.sourceBbox ?? item.bbox;
-  const image = sharp(Buffer.from(sourceBytes));
-  const metadata = await image.metadata();
-  if (!metadata.width || !metadata.height) throw new Error('Unable to read source-photo dimensions.');
-
-  const left = Math.max(0, Math.round(sourceBox.x * metadata.width));
-  const top = Math.max(0, Math.round(sourceBox.y * metadata.height));
-  const width = Math.max(2, Math.min(metadata.width - left, Math.round(sourceBox.w * metadata.width)));
-  const height = Math.max(2, Math.min(metadata.height - top, Math.round(sourceBox.h * metadata.height)));
-  const crop = await sharp(Buffer.from(sourceBytes)).extract({ left, top, width, height }).ensureAlpha().png().toBuffer();
-  const mask = sourceMaskSvg(item, width, height);
+async function exactCutout(source: PreparedSource, item: PhotoSceneItem) {
+  const rect = sourceRect(item, source.width, source.height);
+  const crop = await sharp(source.bytes)
+    .extract(rect)
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+  const mask = maskSvg(item, rect, rect, { feather: 0.55, stroke: 1.2 });
   const bytes = await sharp(crop)
     .composite([{ input: mask, blend: 'dest-in' }])
     .png({ compressionLevel: 9 })
     .toBuffer();
-  return { bytes, width: metadata.width, height: metadata.height };
+  return { bytes, rect };
+}
+
+async function localizedBackground(source: PreparedSource, item: PhotoSceneItem) {
+  const objectRect = sourceRect(item, source.width, source.height);
+  const patchRect = paddedRect(objectRect, source.width, source.height);
+  const patch = await sharp(source.bytes)
+    .extract(patchRect)
+    .jpeg({ quality: 96, chromaSubsampling: '4:4:4' })
+    .toBuffer();
+
+  const prompt = [
+    'This is a tight crop from an existing room photograph used only to reconstruct pixels hidden by one plant.',
+    'Remove only the plant and reconstruct the dresser, mirror reflection, wall, light, and surface directly behind it.',
+    'Do not move, add, remove, restyle, resize, or replace any other visible object in this crop.',
+    'Preserve the exact camera angle, exposure, color, material texture, dresser edge, mirror frame, lamp, clothing, and neighboring details.',
+    'Do not improve or redesign the room. This is local inpainting, not a room makeover.',
+    'Do not add text, labels, borders, watermarks, or UI.',
+  ].join(' ');
+
+  let generatedBytes: Uint8Array;
+  try {
+    const result = await generateImage({
+      model: process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2',
+      prompt: { text: prompt, images: [new Uint8Array(patch)] },
+      aspectRatio: aspectRatioFor(patchRect.width, patchRect.height),
+      providerOptions: { openai: { quality: 'high' } },
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(95_000),
+    });
+    generatedBytes = result.image.uint8Array;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Background preparation failed.';
+    throw new Error(message);
+  }
+
+  const inpaintMask = maskSvg(item, objectRect, patchRect, { feather: 1.4, stroke: 8 });
+  const generatedPatch = await sharp(Buffer.from(generatedBytes))
+    .resize(patchRect.width, patchRect.height, { fit: 'fill' })
+    .ensureAlpha()
+    .composite([{ input: inpaintMask, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  const background = await sharp(source.bytes)
+    .composite([{ input: generatedPatch, left: patchRect.left, top: patchRect.top, blend: 'over' }])
+    .jpeg({ quality: 96, chromaSubsampling: '4:4:4' })
+    .toBuffer();
+
+  return { background, patchRect, objectRect };
 }
 
 export async function POST(request: Request) {
@@ -95,7 +191,7 @@ export async function POST(request: Request) {
   const requestedItemId = String(body.itemId || '');
   if (!roomId || !sourceAssetId) return NextResponse.json({ error: 'Room and source photo are required.' }, { status: 400 });
 
-  const { data: source, error: sourceError } = await supabase
+  const { data: sourceRowData, error: sourceError } = await supabase
     .from('room_assets')
     .select('id,object_path,mime_type,byte_length,capture_context,created_at')
     .eq('id', sourceAssetId)
@@ -103,9 +199,9 @@ export async function POST(request: Request) {
     .eq('owner_id', ownerId)
     .is('deleted_at', null)
     .single();
-  if (sourceError || !source) return NextResponse.json({ error: 'Source room photo not found.' }, { status: 404 });
+  if (sourceError || !sourceRowData) return NextResponse.json({ error: 'Source room photo not found.' }, { status: 404 });
 
-  const sourceRow = source as AssetRow;
+  const sourceRow = sourceRowData as AssetRow;
   const scene = sourceRow.capture_context?.scene as PhotoScene | undefined;
   if (!scene?.items?.length) return NextResponse.json({ error: 'Photo scene calibration is required first.' }, { status: 409 });
   const movable = scene.items.find((item) => item.id === requestedItemId && item.draggable) ?? scene.items.find((item) => item.draggable);
@@ -123,18 +219,21 @@ export async function POST(request: Request) {
   if (listError) return NextResponse.json({ error: listError.message }, { status: 500 });
 
   const rows = (roomAssets ?? []) as AssetRow[];
-  const existingBackground = rows.find((asset) => method(asset) === 'scene_background_plate' && sourceId(asset) === sourceAssetId);
+  const existingBackground = rows.find((asset) =>
+    method(asset) === 'scene_background_plate'
+      && sourceId(asset) === sourceAssetId
+      && renderMode(asset) === BACKGROUND_RENDER_MODE);
   const existingExactCutout = rows.find((asset) =>
     method(asset) === 'scene_object_cutout'
       && sourceId(asset) === sourceAssetId
       && itemId(asset) === movable.id
-      && renderMode(asset) === 'exact_source_mask_v3');
+      && renderMode(asset) === CUTOUT_RENDER_MODE);
 
   if (existingBackground && existingExactCutout) {
     return NextResponse.json({
       prepared: true,
       reused: true,
-      renderMode: 'exact_source_mask_v3',
+      renderMode: CUTOUT_RENDER_MODE,
       background: await signedAsset(supabase, existingBackground),
       object: await signedAsset(supabase, existingExactCutout),
     });
@@ -142,61 +241,49 @@ export async function POST(request: Request) {
 
   const { data: sourceBlob, error: downloadError } = await supabase.storage.from('room-assets').download(sourceRow.object_path);
   if (downloadError || !sourceBlob) return NextResponse.json({ error: 'Unable to read the private source photo.' }, { status: 500 });
-  const sourceBytes = new Uint8Array(await sourceBlob.arrayBuffer());
 
-  let cutout;
+  let preparedSource: PreparedSource;
+  let cutout: Awaited<ReturnType<typeof exactCutout>>;
   try {
-    cutout = await exactCutout(sourceBytes, movable);
+    const rawSource = new Uint8Array(await sourceBlob.arrayBuffer());
+    preparedSource = await normalizeSource(rawSource);
+    cutout = await exactCutout(preparedSource, movable);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Exact object extraction failed.' }, { status: 500 });
   }
 
   let backgroundAsset = existingBackground ?? null;
   if (!backgroundAsset) {
-    const sourceBox = movable.sourceBbox ?? movable.bbox;
-    const location = `${Math.round(sourceBox.x * 100)}% from the left, ${Math.round(sourceBox.y * 100)}% from the top, spanning about ${Math.round(sourceBox.w * 100)}% of the image width and ${Math.round(sourceBox.h * 100)}% of the image height`;
-    const backgroundPrompt = [
-      'Edit this exact room photograph to create a clean background plate for direct object manipulation.',
-      `Remove only the ${movable.label.toLowerCase()} located ${location}.`,
-      'Reconstruct only the dresser top, mirror reflection, wall, lighting, shadows, and surfaces hidden behind that object.',
-      'Do not remove, move, replace, restyle, or add any other object.',
-      'Preserve the exact camera viewpoint, crop, perspective, architecture, color, exposure, texture, bedding, dresser, folded clothing, lamp, window treatment, floor items, and all other scene details.',
-      'The result must look like the same untouched photograph except that this single object was never there.',
-      'Do not add text, labels, borders, watermarks, UI, or design changes.',
-    ].join(' ');
-
-    let backgroundImage;
+    let localized;
     try {
-      const result = await generateImage({
-        model: process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2',
-        prompt: { text: backgroundPrompt, images: [sourceBytes] },
-        aspectRatio: aspectRatioFor(cutout.width, cutout.height),
-        providerOptions: { openai: { quality: 'high' } },
-        maxRetries: 1,
-        abortSignal: AbortSignal.timeout(95_000),
-      });
-      backgroundImage = result.image;
+      localized = await localizedBackground(preparedSource, movable);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Background preparation failed.';
-      return NextResponse.json({ error: message, code: 'background_preparation_failed' }, { status: 502 });
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Background preparation failed.', code: 'background_preparation_failed' }, { status: 502 });
     }
 
-    const mediaType = backgroundImage.mediaType || 'image/png';
-    const bytes = Buffer.from(backgroundImage.uint8Array);
-    const objectPath = `${ownerId}/${roomId}/scene/${sourceAssetId}/background-${crypto.randomUUID()}.${extensionFor(mediaType)}`;
-    const { error: uploadError } = await supabase.storage.from('room-assets').upload(objectPath, new Blob([bytes], { type: mediaType }), { contentType: mediaType, upsert: false });
+    const objectPath = `${ownerId}/${roomId}/scene/${sourceAssetId}/background-local-v3-${crypto.randomUUID()}.jpg`;
+    const { error: uploadError } = await supabase.storage.from('room-assets').upload(
+      objectPath,
+      new Blob([localized.background], { type: 'image/jpeg' }),
+      { contentType: 'image/jpeg', upsert: false },
+    );
     if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+
     const { data: inserted, error: insertError } = await supabase.from('room_assets').insert({
       room_id: roomId,
       owner_id: ownerId,
       object_path: objectPath,
-      mime_type: mediaType,
-      byte_length: bytes.byteLength,
+      mime_type: 'image/jpeg',
+      byte_length: localized.background.byteLength,
       capture_context: {
         captureMethod: 'scene_background_plate',
         sourceAssetId,
         sceneVersion: scene.version,
+        renderMode: BACKGROUND_RENDER_MODE,
         model: process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2',
+        patchRect: localized.patchRect,
+        objectRect: localized.objectRect,
+        sourceInvariant: 'outside_object_mask',
         generatedAt: new Date().toISOString(),
       },
     }).select('id,object_path,mime_type,byte_length,capture_context,created_at').single();
@@ -210,8 +297,13 @@ export async function POST(request: Request) {
   let exactCutoutAsset = existingExactCutout ?? null;
   if (!exactCutoutAsset) {
     const cutoutPath = `${ownerId}/${roomId}/scene/${sourceAssetId}/${movable.id}-exact-v3-${crypto.randomUUID()}.png`;
-    const { error: uploadError } = await supabase.storage.from('room-assets').upload(cutoutPath, new Blob([cutout.bytes], { type: 'image/png' }), { contentType: 'image/png', upsert: false });
+    const { error: uploadError } = await supabase.storage.from('room-assets').upload(
+      cutoutPath,
+      new Blob([cutout.bytes], { type: 'image/png' }),
+      { contentType: 'image/png', upsert: false },
+    );
     if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+
     const { data: inserted, error: insertError } = await supabase.from('room_assets').insert({
       room_id: roomId,
       owner_id: ownerId,
@@ -223,7 +315,7 @@ export async function POST(request: Request) {
         sourceAssetId,
         itemId: movable.id,
         sceneVersion: scene.version,
-        renderMode: 'exact_source_mask_v3',
+        renderMode: CUTOUT_RENDER_MODE,
         segmentation: movable.segmentation ?? 'manual_polygon_v3',
         generatedAt: new Date().toISOString(),
       },
@@ -238,7 +330,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     prepared: true,
     reused: Boolean(existingBackground && existingExactCutout),
-    renderMode: 'exact_source_mask_v3',
+    renderMode: CUTOUT_RENDER_MODE,
     background: await signedAsset(supabase, backgroundAsset),
     object: await signedAsset(supabase, exactCutoutAsset),
   });
