@@ -1,83 +1,83 @@
 # NestMetric Current State
 
-## v0.2.2 Phase 2 durable-backend release candidate
-Status: **canonical Git source established on `main`; dedicated Supabase backend provisioned/migrated; Google OAuth live acceptance passed; starter Room Model persistence and authenticated Studio rendering confirmed; Studio interaction/visual refinement preview built and READY; full persistence acceptance still in progress; not production-promoted.**
+## v0.2.2 Phase 2 photo-first durable-backend release candidate
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; refined Geometry interaction live-accepted by the user; photo-first Studio implemented and build-validated in a READY Preview; photo upload and AI visual-proposal live acceptance still pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
-- Canonical `main` head before this auth/refinement work: `b0800d7ba379912f703ec322fab24ae08d4be436`.
-- Active feature branch: `parallax/server-google-oauth`.
-- Server-side OAuth launcher commit: `d1ecfe957dc26a87d8fd965e5d32f75ea7887043`.
-- Runtime public-config fallback implementation is complete through commit `1ccd8c5850408e944a145ad899b4399f21f9ab01`.
-- First-load Studio initialization fix: `242dda443247deba721d8ced1cc79a1e28373f5c`.
-- Studio direct-manipulation refinement: `542921bcbfb0eb77534e92f9124d11ffaeac0589`.
-- Studio visual hierarchy refinement: `b7575b82d183434db8960adefc6f849c2a853f12`.
+- Canonical `main` head before the active auth/UX work: `b0800d7ba379912f703ec322fab24ae08d4be436`.
+- Active feature branch: `parallax/photo-first-studio`, based on the accepted auth/Studio-refinement branch.
+- Photo proposal API route: `895f9429a076a24d688135f7a097d67a827eb6ad`.
+- Photo-first Studio: `56b9fdd0596daccb4102f0590c4c04a24673cd45`.
+- Photo-first Studio visual system: `1220b58b287950f967d2602833a92ec66ca6e701`.
+- Photo-first landing direction: `e210df4ab01d33687957703c95ef8dbbe4d2a98f`; supporting landing stylesheet `15b5dbf88f076e3513fdff8893cd9eb58777c6bc`; layout/metadata `0eb94306207254a42adab4379ad666d7a110f315`.
 - Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
-- Runtime dependencies are pinned and `.env.production` is excluded from source control.
+
+### Durable product direction — 2026-08-20
+- NestMetric is now explicitly governed as a **functional photo-augmentation product, not a CAD application**.
+- The real room photo is the primary user-facing workspace for Organize, Arrange, and early Build exploration.
+- The canonical Room Model remains authoritative for geometry, constraints, measurement evidence, persistence, and Build readiness, but is surfaced as a secondary Geometry view when precision matters.
+- AI-generated visual proposals are separate advisory assets. They do not mutate measured coordinates, measurements, constraints, or Build readiness and must remain visibly distinguishable from the original photo.
+- A top-down Room Model is not treated as calibrated to a perspective photo without explicit calibration/projection evidence.
 
 ### Durable backend
-- Supabase project: `NestMetric` (`yyrpennpmwajlbepoemt`)
-- Organization: `Ryan9876's Org` (`qjxihuxzncnpbjnwuaie`)
-- Region: `us-east-1`
-- Creation cost confirmed: `$0/month`
-- Project state after creation: `ACTIVE_HEALTHY`
-- Migrations applied: `phase2_room_model` and the covering-index migration; both migration files are canonical source artifacts.
+- Supabase project: `NestMetric` (`yyrpennpmwajlbepoemt`), region `us-east-1`, state previously confirmed `ACTIVE_HEALTHY`.
 - Eight owner-scoped public tables have RLS enabled.
-- Storage bucket `room-assets` is private and storage-object operations are owner scoped.
-- Supabase security advisor: no findings after migration.
-- Foreign-key index findings were repaired; remaining unused-index notices are expected on the new database.
+- Private Storage bucket `room-assets` remains the durable source for room imagery.
+- Existing `room_assets.capture_context` supports source-photo and AI-proposal classification without a schema migration.
+- Source room photos use `captureMethod: guided_web_photo`.
+- Generated visual proposals use `captureMethod: ai_photo_proposal` plus source asset id, mode, goal, model, and generation timestamp.
+- Source and generated assets remain owner-scoped/private; clients receive short-lived signed URLs.
 
-### Authentication and runtime configuration
-- Supabase Google provider is configured with the dedicated NestMetric Google Cloud OAuth client.
-- Google OAuth initiation is server-side at `/auth/google`; the route uses the Supabase SSR client, creates the PKCE flow, and redirects to the provider.
-- `/auth/callback` exchanges an OAuth code for the authenticated session and redirects to `/studio`.
-- Live browser acceptance on 2026-08-20 confirmed `/auth/google` 307, Supabase Google authorization/callback, PKCE token exchange 200, NestMetric `/auth/callback` 307, and authenticated `/studio` execution.
-- The login UI uses ordinary navigation to `/auth/google`; Google sign-in defaults enabled for this configured project and can be explicitly disabled with `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=false`.
-- Supabase clients use one shared runtime configuration module. Vercel environment variables override the dedicated NestMetric Supabase URL/publishable key; if an inline preview does not receive those runtime variables, the source contains safe project-specific fallbacks for the public URL and publishable key only.
-- No Supabase secret/service-role key is stored in source or exposed to the browser.
-- Email magic-link sign-in remains available as a fallback, but Supabase default SMTP has already hit its development email rate limit and is not considered production-ready mail infrastructure.
+### Authentication and starter persistence
+- Google OAuth is configured and live browser acceptance passed through server-side `/auth/google`, Supabase Google OAuth/PKCE, `/auth/callback`, and authenticated `/studio`.
+- First authenticated Studio initialization persisted the expected starter state: `1` project, `1` room, `3` room objects, `1` opening.
+- The original same-render first-load reload defect was fixed by redirecting to a fresh `/studio` request after starter creation.
+- Authenticated Studio rendering was subsequently confirmed.
 
-### Authenticated starter persistence acceptance — 2026-08-20
-- Google OAuth completed successfully and established an authenticated Supabase session.
-- First authenticated Studio execution inserted all expected starter data successfully: `1` project, `1` room, `3` room objects, `1` room opening, `0` measurements, `0` assets.
-- Supabase API logs show all starter insert operations returned HTTP `201`.
-- The original first Studio render returned HTTP `500` with `Unable to initialize the Room Model.` despite successful persistence.
-- Root cause: the page performed an empty room GET, wrote the starter Room Model, then repeated the same room GET in the same Next.js render. The repeated GET was not sent to Supabase, consistent with same-request fetch memoization/reuse of the first empty result.
-- Source fix `242dda443247deba721d8ced1cc79a1e28373f5c` now creates the starter Room Model and redirects to `/studio`, forcing a fresh request to load persisted data.
-- Live browser reload subsequently rendered the authenticated `Main room` Studio successfully using the durable Supabase-backed Room Model.
+### Geometry interaction acceptance
+- The user live-tested the refined drag interaction and reported: **“It works.”**
+- Geometry retains exact grab-offset dragging, continuous motion, release-time 50 mm snap, boundary clamping, contextual conflicts, invalid-drop reversion, true physical aspect ratio, and one final durable write per valid release.
+- Geometry is retained as a secondary precision utility in the photo-first product rather than removed.
 
-### Studio interaction and visual refinement
-- Dragging now preserves the exact pointer grab offset; movable objects no longer jump to their center when picked up.
-- Pointer motion is continuous and unsnapped while dragging. The 50 mm grid is applied only on release.
-- Movement is clamped to room bounds during drag; fixed/opening conflicts are previewed contextually.
-- Invalid releases revert to the original persisted position instead of silently stopping mid-drag.
-- Valid releases perform deterministic placement validation and persist exactly the final snapped coordinates once.
-- The room canvas preserves the Room Model's physical aspect ratio instead of independently stretching X/Y geometry.
-- Visual states now distinguish selected, fixed, dragging and invalid placement; the dragging object receives lift/grab feedback.
-- Capture and Measurements moved behind progressive disclosure; object list and inspector are visually quieter so the floor plan is the primary working surface.
-- Stale status/conflict messages clear when selection or workspace mode changes.
+### Photo-first Studio implementation
+- Studio defaults to `Photo`, with `Geometry` as the secondary view.
+- With no room photo, the central workspace asks the user to take/choose a private room photo rather than presenting a plan first.
+- Source photos are uploaded to private Supabase Storage with durable `room_assets` metadata.
+- The photo workspace displays the original image and a filmstrip/history of generated visual proposals.
+- Generated images are explicitly labeled `Visual proposal` and display a concept disclaimer that measured geometry remains authoritative.
+- Organize / Arrange / Build remain top-level modes; the photo goal describes the desired functional outcome rather than CAD operations.
+- The landing page and metadata now describe functional photo augmentation instead of floor planning/CAD.
 
-### Current Studio-refinement preview
-- Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`)
-- Preview deployment: `dpl_E7zgQ1SEdpoiw8ngGm6RpmA7phGE`
-- Preview URL: `https://nestmetric-g2t2m5xrm-lew7.vercel.app`
-- State: `READY`
-- Preview was built from the exact approved feature-branch runtime using a 29-file inline package plus a Next.js framework override; production aliases were not changed.
-- Vercel detected Next.js `16.3.1`; compile and TypeScript completed successfully.
-- Built routes include `/auth/google`, `/auth/callback`, `/studio`, and `/api/health/backend`.
-- Live UX acceptance of the refined drag feel and layout is still pending user evaluation.
+### Photo proposal generation path
+- New authenticated route: `/api/ai/photo-proposal`.
+- The route reads the authenticated owner's private source photo, requests a high-fidelity image edit using GPT Image 2 by default, persists the output back to private `room-assets`, records proposal metadata, and returns a short-lived signed URL.
+- Prompts explicitly preserve camera viewpoint, architecture, perspective, scale, occlusion, lighting direction, and recognizable room surfaces and prohibit CAD drawings, floor plans, diagrams, labels, dimensions, or watermarks.
+- Provider credentials remain server-only and are never stored in source.
+- **Live AI image generation is not yet accepted.** The current Vercel inline Preview mechanism has previously failed to inherit project runtime environment variables; unlike the public Supabase publishable key, `OPENAI_API_KEY` cannot and will not be source-defaulted. The route will return a controlled configuration error if the credential is unavailable.
+- Vercel AI Gateway was evaluated as a potential secretless/OIDC path. Although GPT Image 2 generation is supported, current evidence does not establish a reliable `/images/edits` upload/edit equivalent for this exact source-photo editing workflow, so the implementation remains on the direct OpenAI Image Edit API until an equivalent edit path is verified.
+
+### Current photo-first Preview
+- Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`).
+- Deployment: `dpl_EQK4ttW1UzJ2MQXeEBuMefs4nY1S`.
+- URL: `https://nestmetric-6t1a3l333-lew7.vercel.app`.
+- State: `READY`.
+- Preview only; no production aliases were changed.
+- Vercel detected Next.js `16.3.1`.
+- Production compile passed.
+- TypeScript passed.
+- Built routes include `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
+- Live acceptance still required for: photo upload/private display, photo persistence across reload/sign-in, and AI visual proposal generation/private persistence.
 
 ### Production state
-The existing NestMetric production alias remains on the previously verified release. v0.2.2 will not be production-promoted until full authenticated persistence acceptance proves account/session, project/room persistence, object movement, measurement persistence, and private asset storage against Supabase, and the refined Studio interaction receives live acceptance.
+The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first work is **not production-promoted**. Production promotion remains gated on live photo-first acceptance plus the remaining authenticated persistence checks and explicit promotion authorization.
 
-### Known external constraints
-- Vercel project-level framework configuration still reports `framework: null`; previews explicitly supply a Next.js framework override. This should be normalized before routine production releases.
-- The current Vercel connector's inline deployment path does not reliably inherit project runtime environment variables; NestMetric therefore has safe public Supabase defaults while retaining environment overrides.
-- Supabase default SMTP is suitable only for development/testing and has already rate-limited repeated magic-link attempts; production email auth requires custom SMTP if retained.
+### Known platform constraints
+- Vercel project-level framework configuration still reports `framework: null`; inline Previews explicitly supply a Next.js framework override. This should be normalized before routine production releases.
+- The current Vercel inline deployment path does not reliably inherit project runtime environment variables. Public Supabase project configuration has a safe dedicated-project fallback; secrets do not.
+- Supabase default SMTP is not production-ready and has already rate-limited email magic-link testing; Google OAuth is the accepted auth path unless custom SMTP is added later.
 
-## Development workflow normalization — 2026-08-19
-- GitHub `main` is now the canonical source of truth; normal development no longer reconstructs source from Vercel artifacts.
-- Changes use `parallax/...` branches and PRs.
-- Risk-scoped validation commands are available: `validate:ui`, `validate:domain`, `validate:full`, and `classify:change`.
-- Normal release flow is: source change → scoped validation → one preview → live acceptance → merge/promotion.
-- Vercel chunk/bootstrap source transport is retired for normal development. The connector can create inline-file previews from the canonical Git tree when direct Git-source deployment is unavailable.
+## Development workflow normalization
+- GitHub `main` remains the canonical source of truth.
+- Changes use `parallax/...` branches.
+- Release flow remains: source change → scoped validation → Preview → live acceptance → merge/promotion.
