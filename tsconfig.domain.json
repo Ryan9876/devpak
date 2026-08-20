@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": ".domain-dist",
+    "rootDir": ".",
+    "esModuleInterop": true
+  },
+  "files": [
+    "src/lib/room-model/types.ts",
+    "src/lib/room-model/geometry.ts",
+    "src/lib/room-model/verification.ts",
+    "src/lib/planning/deterministic.ts"
+  ]
+}

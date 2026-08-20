@@ -1,0 +1,3 @@
+import type { MeasurementEvidence, RoomModel } from './types';
+export function measurementIsBuildSafe(measurement:MeasurementEvidence){return measurement.verification==='verified'||measurement.verification==='corrected';}
+export function buildVerificationGate(room:RoomModel,requiredLabels:string[]){const missing:string[]=[],unverified:string[]=[];for(const label of requiredLabels){const match=room.measurements.find(item=>item.label.toLowerCase()===label.toLowerCase());if(!match)missing.push(label);else if(!measurementIsBuildSafe(match))unverified.push(label);}return{allowed:missing.length===0&&unverified.length===0,missing,unverified};}
