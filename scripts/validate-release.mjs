@@ -4,7 +4,8 @@ const required = [
   'PROJECT-CONSTITUTION.md','ARCHITECTURE.md','DESIGN-SYSTEM.md','CURRENT-STATE.md',
   'src/lib/room-model/types.ts','src/lib/room-model/geometry.ts','src/lib/room-model/repository.ts',
   'src/components/Studio.tsx','src/app/object-tools.css','src/app/studio/page.tsx','src/app/projects/page.tsx','src/app/projects/actions.ts',
-  'src/app/projects/[projectId]/studio/page.tsx','src/app/api/health/backend/route.ts',
+  'src/app/projects/[projectId]/studio/page.tsx','src/app/api/health/backend/route.ts','src/app/api/ai/plan/route.ts',
+  'src/app/api/proposals/[proposalId]/decision/route.ts',
   'supabase/migrations/202608200001_phase2_room_model.sql','supabase/migrations/202608200002_phase2_indexes.sql'
 ];
 const missing = required.filter((p) => !existsSync(p));
@@ -26,7 +27,18 @@ for (const marker of ['addObject','resizeSelected','rotateSelected','deleteSelec
   if (!studio.includes(marker)) throw new Error(`Missing visual object tool: ${marker}`);
 }
 if (!studio.includes('Fixed elements are protected')) throw new Error('Fixed-element editing protection is missing.');
+if (!studio.includes('projectId: room.projectId') || !studio.includes('/decision')) {
+  throw new Error('Studio proposal lifecycle is not explicitly project-scoped and durable.');
+}
+const planRoute = readFileSync('src/app/api/ai/plan/route.ts','utf8');
+for (const marker of ['loadProjectRoom','projectId','planning_proposals']) {
+  if (!planRoute.includes(marker)) throw new Error(`Planning route missing durable project scope: ${marker}`);
+}
+const decisionRoute = readFileSync('src/app/api/proposals/[proposalId]/decision/route.ts','utf8');
+if (!decisionRoute.includes('owner_id') || !decisionRoute.includes('decided_at')) {
+  throw new Error('Proposal decisions must remain owner-scoped and timestamped.');
+}
 if (existsSync('.env.production')) {
   console.warn('NESTMETRIC_RELEASE_WARNING .env.production exists locally and is intentionally gitignored.');
 }
-console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true });
+console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true, proposalHistory: true });
