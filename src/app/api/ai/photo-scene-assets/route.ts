@@ -50,16 +50,6 @@ function extensionFor(mediaType: string) {
   return 'png';
 }
 
-function gcd(a: number, b: number): number {
-  return b ? gcd(b, a % b) : a;
-}
-
-function aspectRatioFor(width?: number, height?: number): `${number}:${number}` | undefined {
-  if (!width || !height) return undefined;
-  const divisor = gcd(width, height);
-  return `${Math.round(width / divisor)}:${Math.round(height / divisor)}` as `${number}:${number}`;
-}
-
 async function signedAsset(supabase: Awaited<ReturnType<typeof createClient>>, asset: AssetRow) {
   const { data } = await supabase.storage.from('room-assets').createSignedUrl(asset.object_path, 3600);
   return { id: asset.id, signedUrl: data?.signedUrl ?? null, mimeType: asset.mime_type };
@@ -147,12 +137,12 @@ async function localizedBackground(source: PreparedSource, item: PhotoSceneItem)
     'Do not add text, labels, borders, watermarks, or UI.',
   ].join(' ');
 
+  const model = process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2';
   let generatedBytes: Uint8Array;
   try {
     const result = await generateImage({
-      model: process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2',
+      model,
       prompt: { text: prompt, images: [new Uint8Array(patch)] },
-      aspectRatio: aspectRatioFor(patchRect.width, patchRect.height),
       providerOptions: { openai: { quality: 'high' } },
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(95_000),
@@ -160,6 +150,13 @@ async function localizedBackground(source: PreparedSource, item: PhotoSceneItem)
     generatedBytes = result.image.uint8Array;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Background preparation failed.';
+    console.error('NESTMETRIC_BACKGROUND_PREPARATION_FAILED', {
+      model,
+      patchWidth: patchRect.width,
+      patchHeight: patchRect.height,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      message,
+    });
     throw new Error(message);
   }
 
