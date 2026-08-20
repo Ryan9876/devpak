@@ -13,6 +13,9 @@
     "src/lib/room-model/types.ts",
     "src/lib/room-model/geometry.ts",
     "src/lib/room-model/verification.ts",
-    "src/lib/planning/deterministic.ts"
+    "src/lib/planning/deterministic.ts",
+    "src/lib/photo/types.ts",
+    "src/lib/photo/placement.ts",
+    "src/lib/photo/defaultScene.ts"
   ]
 }
