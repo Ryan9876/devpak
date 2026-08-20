@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { insideRoom, overlaps, snapPoint, validatePlacement } from '../.domain-dist/src/lib/room-model/geometry.js';
+import { buildVerificationGate } from '../.domain-dist/src/lib/room-model/verification.js';
+import { deterministicProposal } from '../.domain-dist/src/lib/planning/deterministic.js';
+const object=(id,xUm,yUm,fixed=false)=>({id,label:id,kind:'furniture',position:{xUm,yUm},size:{widthUm:1_000_000,depthUm:1_000_000},rotationDeg:0,fixed,clearanceUm:0,source:'user'});
+const room={schemaVersion:2,id:'room',projectId:'project',name:'Test',units:'metric',boundary:{widthUm:4_000_000,depthUm:3_000_000},measurements:[{id:'m1',label:'wall width',valueUm:4_000_000,toleranceUm:10_000,confidence:.99,source:'manual',verification:'verified',correctionHistory:[]}],objects:[object('fixed',0,0,true),object('chair',2_000_000,1_000_000)],openings:[{id:'door',wall:'south',offsetUm:1_000_000,widthUm:900_000,kind:'door'}],assumptions:[],updatedAt:new Date(0).toISOString()};
+test('geometry enforces boundaries and fixed overlap',()=>{assert.equal(insideRoom(room.boundary,object('x',3_000_000,2_000_000)),true);assert.equal(insideRoom(room.boundary,object('x',3_100_000,2_000_000)),false);assert.equal(overlaps(object('a',0,0),object('b',500_000,500_000)),true);assert.ok(validatePlacement(room,object('candidate',500_000,500_000)).some(x=>x.includes('fixed')))});
+test('build gate requires verified evidence',()=>{assert.equal(buildVerificationGate(room,['wall width']).allowed,true);assert.equal(buildVerificationGate(room,['wall width','ceiling height']).allowed,false)});
+test('deterministic proposal is stable and editable',()=>{assert.deepEqual(deterministicProposal(room,'organize'),deterministicProposal(room,'organize'));assert.deepEqual(snapPoint({xUm:123_456,yUm:987_654}),{xUm:100_000,yUm:1_000_000})});

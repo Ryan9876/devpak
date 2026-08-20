@@ -1,0 +1,32 @@
+{
+  "name": "nestmetric",
+  "version": "0.2.2",
+  "private": true,
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:domain": "rm -rf .domain-dist && tsc -p tsconfig.domain.json && node --test tests/domain.test.cjs",
+    "validate:room-model": "node scripts/validate-room-model.mjs",
+    "validate:structure": "node scripts/validate-release.mjs",
+    "validate:ui": "npm run validate:structure && npm run typecheck && npm run build",
+    "validate:domain": "npm run validate:structure && npm run typecheck && npm run test:domain && npm run validate:room-model",
+    "validate:full": "npm run validate:domain && npm run build",
+    "classify:change": "node scripts/classify-change.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.3",
+    "next": "16.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "5.8.3"
+  }
+}

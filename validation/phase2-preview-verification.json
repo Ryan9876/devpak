@@ -1,0 +1,32 @@
+{
+  "version": "0.2.1",
+  "state": "preview-deployed-and-validated",
+  "productionPromoted": false,
+  "vercel": {
+    "projectId": "prj_oHT2phzLSIar0gozplD2yQGV6Wrk",
+    "deploymentId": "dpl_5kEDuuNkSTuT3yk5VVFGwMHB7uGp",
+    "url": "https://nestmetric-cqofy2lly-lew7.vercel.app"
+  },
+  "buildEvidence": {
+    "transportArchiveBytes": 21250,
+    "transportArchiveSha256": "952bd6e53bdda2f1bedb79728f18378755bea9993490bf043bef43289e539113",
+    "typecheck": "pass",
+    "domainTests": {"passed": 3, "failed": 0},
+    "roomModelGate": {"tables": 8, "missing": [], "rls": 8, "policies": 12, "storageBucket": true},
+    "nextBuild": "pass",
+    "nextVersion": "16.3.1"
+  },
+  "liveSmoke": {
+    "rootStatus": 200,
+    "studioStatus": 200,
+    "loginStatus": 200,
+    "modeMarkers": ["Organize", "Arrange", "Build"],
+    "runtimeErrorClusters": 0
+  },
+  "historicalBlockersAtTimeOfPreview": [
+    "Dedicated Supabase project not yet provisioned",
+    "Google OAuth provider credentials not configured",
+    "Legacy data migration not yet executed/reconciled",
+    "GitHub source publication not yet normalized"
+  ]
+}

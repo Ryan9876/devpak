@@ -1,0 +1,13 @@
+begin;
+create index if not exists rooms_owner_idx on public.rooms(owner_id);
+create index if not exists room_measurements_owner_idx on public.room_measurements(owner_id);
+create index if not exists room_objects_owner_idx on public.room_objects(owner_id);
+create index if not exists room_openings_room_idx on public.room_openings(room_id);
+create index if not exists room_openings_owner_idx on public.room_openings(owner_id);
+create index if not exists room_assets_owner_idx on public.room_assets(owner_id);
+create index if not exists planning_proposals_room_idx on public.planning_proposals(room_id);
+create index if not exists planning_proposals_owner_idx on public.planning_proposals(owner_id);
+create index if not exists build_plans_room_idx on public.build_plans(room_id);
+create index if not exists build_plans_owner_idx on public.build_plans(owner_id);
+create index if not exists build_plans_proposal_idx on public.build_plans(proposal_id);
+commit;
