@@ -1,7 +1,7 @@
 'use client';
 
 import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
-import type { PhotoScene } from '@/lib/photo/types';
+import type { NormalizedBox, PhotoScene } from '@/lib/photo/types';
 import PhotoWorkspaceCore from './PhotoWorkspaceCore';
 
 type Props = ComponentProps<typeof PhotoWorkspaceCore>;
@@ -38,6 +38,20 @@ function pillButtonStyle(disabled: boolean) {
     fontWeight: 760,
     padding: '0 14px',
     opacity: disabled ? 0.55 : 1,
+  } as const;
+}
+
+function sourceBoxStyle(box: NormalizedBox) {
+  return {
+    position: 'absolute',
+    left: `${box.x * 100}%`,
+    top: `${box.y * 100}%`,
+    width: `${box.w * 100}%`,
+    height: `${box.h * 100}%`,
+    border: '2px solid rgba(255,255,255,.94)',
+    borderRadius: 8,
+    boxShadow: '0 0 0 3px rgba(36,53,46,.72)',
+    pointerEvents: 'none',
   } as const;
 }
 
@@ -82,6 +96,8 @@ export default function PhotoWorkspace(props: Props) {
     ? `${sourceObjectPath}:${movable!.id}:${workingScene.version}:${retryToken}`
     : '';
   const inheritedRefined = Boolean(refined && parentMovable?.id && parentMovable.id === movable?.id);
+  const effectiveRefined = inheritedRefined || Boolean(preparedAssets);
+  const awaitingPreparation = Boolean(canPrepare && !effectiveRefined && phase !== 'failed');
 
   useEffect(() => {
     setPreparedAssets(null);
@@ -96,13 +112,13 @@ export default function PhotoWorkspace(props: Props) {
     attemptedKeyRef.current = attemptKey;
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function prepare() {
       setPhase('preparing');
       setFailure('');
-      onStatus?.(`Preparing ${movable?.label ?? 'selected object'} for realistic movement. You can keep using the photo.`);
+      onStatus?.(`Preparing ${movable?.label ?? 'selected object'} for realistic movement.`);
 
-      const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), PREPARATION_TIMEOUT_MS);
 
       try {
@@ -164,6 +180,7 @@ export default function PhotoWorkspace(props: Props) {
     void prepare();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [attemptKey, canPrepare, disabled, inheritedRefined, movable?.id, movable?.label, onStatus, preparedAssets, selecting, selectionBusy, sourceObjectPath]);
 
@@ -220,11 +237,12 @@ export default function PhotoWorkspace(props: Props) {
       setWorkingScene(nextScene);
       setPreparedAssets(null);
       attemptedKeyRef.current = '';
+      setPhase('preparing');
       await onSceneChanged(nextScene);
       setSelecting(false);
       setSelectionPoint(null);
       setSelectionError('');
-      onStatus?.(`${selected.item.label} selected. Preparing its real photo pixels for movement…`);
+      onStatus?.(`${selected.item.label} selected. Creating its clean movement layer…`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to identify that object.';
       setSelectionError(message);
@@ -342,7 +360,65 @@ export default function PhotoWorkspace(props: Props) {
     );
   }
 
-  const effectiveRefined = inheritedRefined || Boolean(preparedAssets);
+  if (awaitingPreparation) {
+    return (
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div
+          style={{
+            position: 'relative',
+            overflow: 'hidden',
+            background: '#0f1e19',
+            borderRadius: 12,
+          }}
+        >
+          <img
+            src={sourceImageUrl}
+            alt="Room photo while selected object is prepared"
+            draggable={false}
+            style={{ display: 'block', width: '100%', height: 'auto', WebkitTouchCallout: 'none' }}
+            onContextMenu={(event) => event.preventDefault()}
+          />
+          {movable?.sourceBbox && <span aria-hidden="true" style={sourceBoxStyle(movable.sourceBbox)} />}
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              position: 'absolute',
+              left: 12,
+              right: 12,
+              bottom: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: 'rgba(15,30,25,.82)',
+              color: '#fff',
+              fontSize: '.72rem',
+              lineHeight: 1.4,
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <span aria-hidden="true" style={{ fontSize: '1rem' }}>◌</span>
+            <span><b>Preparing {movable?.label ?? 'object'}…</b> Isolating the real object and cleaning the pixels behind it. Movement unlocks automatically when ready.</span>
+          </div>
+        </div>
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: 12,
+            background: 'rgba(220,230,220,.84)',
+            color: '#24352e',
+            fontSize: '.72rem',
+            lineHeight: 1.4,
+          }}
+        >
+          <b>Original photo preserved.</b> NestMetric will not show a crude temporary cutout while preparation is running.
+        </div>
+      </div>
+    );
+  }
+
   const core = (
     <PhotoWorkspaceCore
       {...props}
@@ -356,27 +432,6 @@ export default function PhotoWorkspace(props: Props) {
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       {core}
-
-      {phase === 'preparing' && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 12px',
-            borderRadius: 12,
-            background: 'rgba(220,230,220,.84)',
-            color: '#24352e',
-            fontSize: '.72rem',
-            lineHeight: 1.4,
-          }}
-        >
-          <span aria-hidden="true" style={{ fontSize: '1rem' }}>◌</span>
-          <span><b>Preparing {movable?.label ?? 'object'}…</b> Keep zooming and panning while the clean movement layer is created.</span>
-        </div>
-      )}
 
       {phase === 'failed' && (
         <div
