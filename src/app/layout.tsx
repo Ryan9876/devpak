@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import './styles.css';
 import './photo-landing.css';
+import './photo-manipulation.css';
 
 export const metadata = { title: 'NestMetric', description: 'Functional room photo augmentation with measured geometry underneath.' };
 
