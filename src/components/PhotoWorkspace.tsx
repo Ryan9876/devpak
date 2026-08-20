@@ -6,7 +6,7 @@ import PhotoWorkspaceCore from './PhotoWorkspaceCore';
 type Props = ComponentProps<typeof PhotoWorkspaceCore>;
 type PreparationPhase = 'idle' | 'preparing' | 'failed';
 
-const PREPARATION_TIMEOUT_MS = 35_000;
+const PREPARATION_TIMEOUT_MS = 115_000;
 
 function sourceObjectPathFromSignedUrl(value: string) {
   try {
