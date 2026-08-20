@@ -1,7 +1,7 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; refined Geometry interaction live-accepted by the user; photo-first Studio implemented and build-validated in a READY Preview; photo upload and AI visual-proposal live acceptance still pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; refined Geometry interaction live-accepted by the user; photo-first Studio implemented and build-validated in a READY Preview; private source-photo upload acceptance passed; reload/sign-in persistence and AI visual-proposal acceptance still pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`
@@ -14,7 +14,7 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Temporary Vercel/bootstrap source artifacts are not part of the canonical tree.
 
 ### Durable product direction — 2026-08-20
-- NestMetric is now explicitly governed as a **functional photo-augmentation product, not a CAD application**.
+- NestMetric is explicitly governed as a **functional photo-augmentation product, not a CAD application**.
 - The real room photo is the primary user-facing workspace for Organize, Arrange, and early Build exploration.
 - The canonical Room Model remains authoritative for geometry, constraints, measurement evidence, persistence, and Build readiness, but is surfaced as a secondary Geometry view when precision matters.
 - AI-generated visual proposals are separate advisory assets. They do not mutate measured coordinates, measurements, constraints, or Build readiness and must remain visibly distinguishable from the original photo.
@@ -49,6 +49,15 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Organize / Arrange / Build remain top-level modes; the photo goal describes the desired functional outcome rather than CAD operations.
 - The landing page and metadata now describe functional photo augmentation instead of floor planning/CAD.
 
+### Private source-photo acceptance — 2026-08-20
+- Live user upload succeeded in the photo-first Preview.
+- Supabase confirms one durable `room_assets` row for the authenticated room with `captureMethod: guided_web_photo`.
+- The corresponding object exists in the `room-assets` Storage bucket at the exact metadata path.
+- Uploaded asset is JPEG, `2,202,043` bytes, and associated with the authenticated room/owner.
+- Storage bucket `room-assets` is confirmed `public=false`, has a `15 MiB` limit, and permits JPEG/PNG/WebP/HEIC.
+- Current room asset classification is `1` source photo and `0` AI visual proposals.
+- This closes the private upload/storage-object linkage gate. Remaining photo acceptance: confirm the source image survives page reload and sign-out/sign-in in the UI.
+
 ### Photo proposal generation path
 - New authenticated route: `/api/ai/photo-proposal`.
 - The route reads the authenticated owner's private source photo, requests a high-fidelity image edit using GPT Image 2 by default, persists the output back to private `room-assets`, records proposal metadata, and returns a short-lived signed URL.
@@ -67,7 +76,7 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Production compile passed.
 - TypeScript passed.
 - Built routes include `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- Live acceptance still required for: photo upload/private display, photo persistence across reload/sign-in, and AI visual proposal generation/private persistence.
+- Live acceptance still required for: photo persistence across reload/sign-in and AI visual proposal generation/private persistence.
 
 ### Production state
 The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first work is **not production-promoted**. Production promotion remains gated on live photo-first acceptance plus the remaining authenticated persistence checks and explicit promotion authorization.
