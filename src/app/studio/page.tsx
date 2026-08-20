@@ -13,8 +13,10 @@ export default async function StudioPage() {
   const { data: claimsData, error } = await supabase.auth.getClaims();
   const ownerId = claimsData?.claims?.sub;
   if (error || !ownerId) redirect('/login');
-  let room = await loadFirstRoom(supabase, ownerId);
-  if (!room) { await createStarterRoom(supabase, ownerId); room = await loadFirstRoom(supabase, ownerId); }
-  if (!room) throw new Error('Unable to initialize the Room Model.');
+  const room = await loadFirstRoom(supabase, ownerId);
+  if (!room) {
+    await createStarterRoom(supabase, ownerId);
+    redirect('/studio');
+  }
   return <Studio initialRoom={room} ownerId={ownerId} />;
 }
