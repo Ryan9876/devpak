@@ -9,7 +9,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <header className="site-header">
           <a className="brand" href="/">NestMetric</a>
-          <nav><a href="/studio">Studio</a><a href="/login">Sign in</a></nav>
+          <nav><a href="/projects">Projects</a><a href="/studio">Studio</a><a href="/login">Sign in</a></nav>
         </header>
         {children}
       </body>
