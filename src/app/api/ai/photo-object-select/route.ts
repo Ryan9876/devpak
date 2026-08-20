@@ -1,3 +1,4 @@
+import { generateText } from 'ai';
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import { createClient } from '@/lib/supabase/server';
@@ -70,18 +71,6 @@ function stripJsonFence(value: string) {
   const trimmed = value.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced ? fenced[1].trim() : trimmed;
-}
-
-function responseText(payload: any) {
-  if (typeof payload?.output_text === 'string') return payload.output_text;
-  const pieces = Array.isArray(payload?.output) ? payload.output : [];
-  for (const item of pieces) {
-    const content = Array.isArray(item?.content) ? item.content : [];
-    for (const part of content) {
-      if ((part?.type === 'output_text' || part?.type === 'text') && typeof part?.text === 'string') return part.text;
-    }
-  }
-  return '';
 }
 
 function pointInPolygon(point: NormalizedPoint, polygon: NormalizedPoint[]) {
@@ -185,34 +174,21 @@ export async function POST(request: Request) {
     'The bbox must tightly contain the selected object and the tapped crosshair must fall inside or immediately adjacent to it.',
   ].join(' ');
 
-  const gatewayToken = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
-  if (!gatewayToken) return NextResponse.json({ error: 'Object selection AI is not configured.' }, { status: 503 });
-
   let selection: SelectionPayload;
   try {
-    const aiResponse = await fetch('https://ai-gateway.vercel.sh/v1/responses', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${gatewayToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        input: [{
-          type: 'message',
-          role: 'user',
-          content: [
-            { type: 'input_text', text: prompt },
-            { type: 'input_image', image_url: `data:image/jpeg;base64,${marked.toString('base64')}`, detail: 'high' },
-          ],
-        }],
-      }),
-      signal: AbortSignal.timeout(45_000),
+    const result = await generateText({
+      model,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image', image: marked, mediaType: 'image/jpeg' },
+        ],
+      }],
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(45_000),
     });
-    const payload = await aiResponse.json().catch(() => ({}));
-    if (!aiResponse.ok) throw new Error(`Object selection model returned ${aiResponse.status}.`);
-    const text = stripJsonFence(responseText(payload));
-    selection = JSON.parse(text) as SelectionPayload;
+    selection = JSON.parse(stripJsonFence(result.text)) as SelectionPayload;
   } catch (error) {
     console.error('NESTMETRIC_OBJECT_SELECTION_FAILED', {
       model,
