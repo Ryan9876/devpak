@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 const required = [
   'PROJECT-CONSTITUTION.md','ARCHITECTURE.md','DESIGN-SYSTEM.md','CURRENT-STATE.md',
   'src/lib/room-model/types.ts','src/lib/room-model/geometry.ts','src/lib/room-model/repository.ts',
-  'src/components/Studio.tsx','src/app/object-tools.css','src/app/studio/page.tsx','src/app/projects/page.tsx','src/app/projects/actions.ts',
+  'src/components/Studio.tsx','src/components/CapturePanel.tsx','src/components/MeasurementPanel.tsx',
+  'src/app/object-tools.css','src/app/evidence.css','src/app/studio/page.tsx','src/app/projects/page.tsx','src/app/projects/actions.ts',
   'src/app/projects/[projectId]/studio/page.tsx','src/app/api/health/backend/route.ts','src/app/api/ai/plan/route.ts',
   'src/app/api/proposals/[proposalId]/decision/route.ts',
   'supabase/migrations/202608200001_phase2_room_model.sql','supabase/migrations/202608200002_phase2_indexes.sql'
@@ -38,7 +39,15 @@ const decisionRoute = readFileSync('src/app/api/proposals/[proposalId]/decision/
 if (!decisionRoute.includes('owner_id') || !decisionRoute.includes('decided_at')) {
   throw new Error('Proposal decisions must remain owner-scoped and timestamped.');
 }
+const capture = readFileSync('src/components/CapturePanel.tsx','utf8');
+for (const marker of ['createSignedUrl','MAX_IMAGE_BYTES','removeAsset','deleted_at']) {
+  if (!capture.includes(marker)) throw new Error(`Room capture workflow missing: ${marker}`);
+}
+const measurement = readFileSync('src/components/MeasurementPanel.tsx','utf8');
+for (const marker of ['photo_estimate','corrected','correction_history','Correct & verify']) {
+  if (!measurement.includes(marker)) throw new Error(`Measurement evidence workflow missing: ${marker}`);
+}
 if (existsSync('.env.production')) {
   console.warn('NESTMETRIC_RELEASE_WARNING .env.production exists locally and is intentionally gitignored.');
 }
-console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true, proposalHistory: true });
+console.log('NESTMETRIC_RELEASE_STRUCTURE_PASS', { required: required.length, runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length, projectScopedStudio: true, objectTools: true, proposalHistory: true, roomEvidence: true });
