@@ -70,6 +70,15 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 - Native browser image callouts/context menus are suppressed in the manipulation surface so touch-and-drag remains application interaction rather than invoking OS image actions.
 - The v1 crop renderer remains only as a temporary fallback when an exact-pixel cutout has not yet been prepared. It is not the target production renderer.
 
+### Automatic refinement orchestration
+- The validated interaction engine is preserved in `PhotoWorkspaceCore.tsx`; automatic derivative preparation is layered around it in the thin public `PhotoWorkspace.tsx` controller.
+- A calibrated Original with source masks must not silently enter the crop fallback merely because refined assets are absent. The controller first attempts one owner-scoped preparation cycle.
+- The controller derives the exact private Storage `object_path` from the signed source URL and sends it to `/api/ai/photo-scene-assets/resolve`. That resolver authenticates the user, matches the exact owner-scoped source row, and returns its authoritative room/source/item identifiers; it never guesses from recency or another room.
+- The controller then calls the existing idempotent `/api/ai/photo-scene-assets` preparation route. Existing derivatives are reused; missing localized background/cutout derivatives are generated once.
+- While preparation is active, object interaction is withheld and the source photo is shown with a clear **Preparing room objects…** state. The crude crop renderer is not presented as target-quality interaction during this period.
+- Successful preparation reloads Studio so fresh private signed URLs and derivative metadata are loaded through the normal photo-asset path.
+- If preparation fails, the validated v4 interaction core remains available in an explicitly labeled **Basic manipulation mode** with a retry action. Degraded fallback is a recoverable state, not a silent default.
+
 ### Canonical Room Model
 - Integer micrometre coordinate system prevents floating-point drift in physical dimensions.
 - Room bounds, openings, fixed objects, movable objects, assets, and measurement evidence share one coordinate contract.
