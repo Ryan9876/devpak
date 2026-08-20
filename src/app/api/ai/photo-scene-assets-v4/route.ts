@@ -250,6 +250,7 @@ export async function POST(request: Request) {
       }, { status: 502 });
     }
 
+    const backgroundModel = process.env.NESTMETRIC_BACKGROUND_MODEL || 'openai/gpt-image-2';
     const backgroundPath = `${ownerId}/${roomId}/scene/${sourceAssetId}/${movable.id}-background-v4-${crypto.randomUUID()}.jpg`;
     const { error: uploadError } = await supabase.storage.from('room-assets').upload(
       backgroundPath,
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
         itemId: movable.id,
         sceneVersion: scene.version,
         renderMode: BACKGROUND_RENDER_MODE,
-        model,
+        model: backgroundModel,
         selectedLabel: movable.label,
         patchRect: localized.patchRect,
         objectRect: localized.objectRect,
