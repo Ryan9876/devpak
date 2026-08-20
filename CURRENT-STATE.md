@@ -1,14 +1,14 @@
 # NestMetric Current State
 
 ## v0.2.2 Phase 2 photo-first durable-backend release candidate
-Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; photo viewport zoom/pan is source-complete and build-validated in a READY Preview, with live iPhone gesture acceptance pending; not production-promoted.**
+Status: **Google OAuth live acceptance passed; durable starter Room Model confirmed; Geometry interaction live-accepted; private source-photo durability accepted; AI visual proposal generation/private persistence live-accepted; surface-aware direct photo manipulation v1/v2 were visually insufficient; v3 exact-pixel manipulation remains live-acceptance pending; the first photo viewport zoom/pan Preview did not engage reliably on iPhone, and the corrected native-iOS pinch plus persistent zoom-control implementation is now build-validated in a READY Preview with live iPhone acceptance pending; not production-promoted.**
 
 ### Canonical source
 - Repository: `Ryan9876/devpak`.
 - Canonical `main` remains unchanged by this work.
 - Active feature branch for this interaction pass: `parallax/photo-viewport-zoom-pan`, created from `parallax/photo-manipulation-v3`.
-- Zoom/pan runtime commit validated in the current Preview: `be27f5e6c591f88bfe4548003278c4385046a87a`.
-- Subsequent commits on the branch update authoritative records only and do not change that validated runtime package.
+- Corrected iOS zoom runtime commit validated in the current Preview: `f94aa3770cdc39f57f6a29505a85c67895aa0af4`.
+- Subsequent authoritative-record commits do not change that validated runtime package.
 - Temporary Vercel bootstrap files are deployment-only and are not canonical source artifacts.
 
 ### Durable product direction — 2026-08-20
@@ -56,35 +56,40 @@ Status: **Google OAuth live acceptance passed; durable starter Room Model confir
 - Live dragging remains browser-side compositing with exact source pixels, deterministic support/collision/gravity, perspective-aware scale, contact shadow, and calibrated foreground occlusion.
 - iOS/Safari native image callouts/context menus are suppressed on the manipulation surface.
 - Visual Proposals are explicitly view-only and direct users back to `Original` for manipulation.
-- Live v3 derivative preparation and final edge/background visual-quality acceptance remain pending.
+- Live v3 derivative preparation and final edge/background visual-quality acceptance remain pending. The most recent user screenshot still showed `Direct manipulation`, indicating the fallback layer rather than a completed refined v3 derivative set.
 
 ### Photo viewport zoom/pan pass
-- New pure viewport helper: `src/lib/photo/viewport.ts`.
+- Pure viewport helper: `src/lib/photo/viewport.ts`.
 - Viewport state is `{scale, tx, ty}` with clamped zoom range `1x..5x` and a `2.5x` double-tap target.
 - Zoom and pan operate above the normalized photo-scene model; they do not mutate support surfaces, collision footprints, gravity, measurements, or persisted scene coordinates.
 - Screen touches are inverse-transformed through the viewport before object drag/physics calculations, preserving normalized photo-space correctness while zoomed and panned.
-- Gesture priority is explicit:
-  - two fingers always own pinch zoom/pan;
+- Gesture priority remains explicit:
+  - two fingers own pinch zoom/pan;
   - one finger beginning on a movable object owns object manipulation;
   - one finger on empty photo space pans only when zoomed;
   - double-tap empty photo space toggles `1x` / `2.5x`.
 - A second finger appearing during an object drag cancels/reverts that object move and transfers control to the viewport gesture.
 - A simple object tap does not generate a persistence write.
 - Small objects receive a minimum 44px invisible interaction target without changing their visible segmentation, scene footprint, or rendered size.
-- While zoomed, a lightweight scale/reset control is shown; resetting to `1x` recenters the photograph.
+- **Live iPhone diagnosis:** the first Pointer-Event-only zoom implementation built correctly but did not engage reliably in the user's iPhone test. The screenshot/footer remained at `1x`, so the first viewport Preview is not accepted for mobile zoom.
+- The corrected implementation adds native `touchstart` / `touchmove` / `touchend` / `touchcancel` listeners with `passive:false` for iOS multi-touch. Native pinch cancels any in-progress object drag, anchors zoom at the two-finger midpoint, and leaves scene physics untouched.
+- Pointer Events remain available for object dragging, desktop interaction, panning, and as a secondary pinch path where supported.
+- A persistent compact `− / live scale / +` control is now available even at `1x`; Reset appears above `1x`. This provides a guaranteed zoom path when browser gesture delivery is unreliable.
 
-### Current zoom/pan Preview — build validated
+### Current corrected iOS zoom Preview — build validated
 - Vercel project: `nestmetric` (`prj_oHT2phzLSIar0gozplD2yQGV6Wrk`).
-- Deployment: `dpl_5FnoLHLpUdHVRmHhfNvHdFGyaEZS`.
-- URL: `https://nestmetric-p136dpqho-lew7.vercel.app`.
+- Deployment: `dpl_2VJLiKSxn7prqRiVm6EnwTm95arZ`.
+- URL: `https://nestmetric-r1k6kcsmb-lew7.vercel.app`.
 - State: `READY`.
 - Preview only; production aliases were not changed.
-- Deployment bootstrapped immutable runtime commit `be27f5e6c591f88bfe4548003278c4385046a87a`.
+- Deployment bootstrapped immutable runtime commit `f94aa3770cdc39f57f6a29505a85c67895aa0af4`.
+- Bootstrap verification confirmed native touch listener registration and the persistent zoom controls were present before validation.
 - Domain validation passed `9/9`: the existing six Room Model/photo support/collision/gravity tests plus three viewport tests covering inverse coordinate mapping, anchored zoom, and translation clamping.
 - Next.js `16.3.1` production compilation passed.
 - TypeScript passed.
 - Built routes include `/api/ai/photo-scene-assets`, `/api/ai/photo-proposal`, `/api/ai/plan`, `/api/health/backend`, `/auth/google`, `/auth/callback`, `/auth/signout`, `/login`, and `/studio`.
-- Live iPhone acceptance for pinch, pan, double-tap, reset, and object dragging while zoomed is still pending.
+- A prior corrected-build attempt failed TypeScript nullability checks in the native touch listener closure and was not accepted/deployed for user testing; the issue was fixed before this READY Preview.
+- Live iPhone acceptance for native pinch, `+ / −`, pan, double-tap, Reset, and object dragging while zoomed is still pending.
 
 ### Production state
 The existing NestMetric production alias remains on the previously verified older release. v0.2.2/photo-first/direct-manipulation work is **not production-promoted**. Production promotion remains gated on live v3/viewport acceptance and explicit promotion authorization.
