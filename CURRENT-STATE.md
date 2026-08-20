@@ -1,5 +1,33 @@
 # NestMetric Current State
 
+## v0.2.5 project-scoped proposal history
+Status: **validated preview; canonical Git branch; not yet production-promoted.**
+
+### v0.2.5 changes
+- Planning requests are explicitly scoped to the active `projectId`; `/api/ai/plan` no longer selects the user's first room implicitly.
+- Proposal generation loads the Room Model through the existing owner + project-scoped repository boundary.
+- Generated proposals are persisted to `planning_proposals` before being returned to the Studio.
+- The persisted database UUID replaces transient/deterministic proposal IDs for authenticated project history.
+- Proposal decisions are recorded through `/api/proposals/[proposalId]/decision` with owner scoping and `decided_at` timestamps.
+- Studio supports explicit Apply and Reject decisions and records both in project history.
+- Applying a proposal now stops if any object persistence operation fails rather than reporting a partially saved layout as complete.
+- Release validation now requires project-scoped planning, proposal persistence and durable decision handling.
+
+### v0.2.5 validation
+- Branch: `parallax/nestmetric-v0.2.5-proposal-history`
+- Preview deployment: `dpl_EKq1h7mb61VT4MMsCMdqShUPxk3D`
+- Preview URL: `https://nestmetric-7s5vgdbtt-lew7.vercel.app`
+- State: `READY`
+- Canonical source commit tested: `d888b58f2dae90ceac0d23a3c7091f9759aacf38`
+- Full validation/build completed in about 16 seconds after source retrieval.
+- Release structure PASS with proposal-history contract enabled.
+- Strict TypeScript PASS.
+- Room Model domain tests: 4/4 PASS.
+- Room Model schema gate PASS.
+- Next.js 16.3.1 production build PASS, including `/api/proposals/[proposalId]/decision`.
+- Preview runtime error/fatal log scan: no findings.
+- Production alias has not been changed.
+
 ## v0.2.4 visual object tools
 Status: **validated preview; canonical Git branch; not yet production-promoted.**
 
