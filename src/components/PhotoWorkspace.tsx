@@ -5,9 +5,11 @@ import { evaluatePlacement, resolveDrop } from '@/lib/photo/placement';
 import type { NormalizedBox, PhotoScene, PhotoSceneItem, PlacementPreview } from '@/lib/photo/types';
 
 type Props = {
-  baseImageUrl: string;
-  cropImageUrl: string;
+  backgroundImageUrl: string;
+  sourceImageUrl: string;
+  objectImageUrls?: Record<string, string | null | undefined>;
   scene: PhotoScene;
+  refined?: boolean;
   disabled?: boolean;
   onSceneChanged: (scene: PhotoScene) => Promise<void> | void;
   onStatus?: (message: string) => void;
@@ -49,10 +51,26 @@ function polygonClip(points: Array<{ x: number; y: number }>) {
   return `polygon(${points.map((point) => `${point.x * 100}% ${point.y * 100}%`).join(',')})`;
 }
 
+function shadowStyle(item: PhotoSceneItem, surfaceKind?: string) {
+  const anchorX = item.bbox.x + item.bbox.w / 2;
+  const anchorY = item.bbox.y + item.bbox.h;
+  const depthScale = surfaceKind === 'floor' ? 1.3 : surfaceKind === 'bed' ? 1.05 : 0.82;
+  const width = Math.max(0.035, item.footprint.width * depthScale);
+  const height = Math.max(0.009, item.footprint.height * 0.58 * depthScale);
+  return {
+    left: `${(anchorX - width / 2) * 100}%`,
+    top: `${(anchorY - height * 0.42) * 100}%`,
+    width: `${width * 100}%`,
+    height: `${height * 100}%`,
+  };
+}
+
 export default function PhotoWorkspace({
-  baseImageUrl,
-  cropImageUrl,
+  backgroundImageUrl,
+  sourceImageUrl,
+  objectImageUrls = {},
   scene,
+  refined = false,
   disabled = false,
   onSceneChanged,
   onStatus,
@@ -77,6 +95,7 @@ export default function PhotoWorkspace({
 
   const movable = useMemo(() => localScene.items.filter((item) => item.draggable && !item.fixed), [localScene]);
   const selected = localScene.items.find((item) => item.id === selectedId) ?? movable[0] ?? null;
+  const hiddenSurfaceIds = new Set(movable.map((item) => item.supportSurfaceId).filter((value): value is string => Boolean(value)));
 
   function replaceItem(itemId: string, updater: (item: PhotoSceneItem) => PhotoSceneItem) {
     const next: PhotoScene = {
@@ -177,7 +196,7 @@ export default function PhotoWorkspace({
   }
 
   return (
-    <div className="photo-interaction-stage">
+    <div className={`photo-interaction-stage${refined ? ' refined' : ' fallback'}`}>
       <div className="photo-interaction-canvas-wrap">
         <div
           ref={canvasRef}
@@ -186,7 +205,7 @@ export default function PhotoWorkspace({
           onPointerUp={() => void finishDrag()}
           onPointerCancel={cancelDrag}
         >
-          <img className="photo-interaction-base" src={baseImageUrl} alt="Room photo" draggable={false} />
+          <img className="photo-interaction-base" src={backgroundImageUrl} alt="Room photo" draggable={false} />
 
           {draggingId && localScene.surfaces.map((surface) => (
             <div
@@ -203,10 +222,13 @@ export default function PhotoWorkspace({
 
           {movable.map((item) => {
             const source = item.sourceBbox ?? item.bbox;
-            const showHole = Boolean(item.sourceBbox && (movedFromSource(item) || draggingId === item.id));
+            const cutoutUrl = objectImageUrls[item.id];
+            const showHole = !refined && Boolean(item.sourceBbox && (movedFromSource(item) || draggingId === item.id));
+            const support = localScene.surfaces.find((surface) => surface.id === item.supportSurfaceId);
             return (
               <div key={item.id}>
                 {showHole && item.sourceBbox && <div className="photo-source-hole" style={boxStyle(item.sourceBbox)} aria-hidden="true" />}
+                <div className={`photo-contact-shadow shadow-${support?.kind ?? 'unknown'}`} style={shadowStyle(item, support?.kind)} aria-hidden="true" />
                 <button
                   type="button"
                   aria-label={`Move ${item.label}`}
@@ -215,24 +237,38 @@ export default function PhotoWorkspace({
                   onPointerDown={(event) => startDrag(event, item)}
                   onClick={() => setSelectedId(item.id)}
                 >
-                  <span className="photo-object-crop" aria-hidden="true">
-                    <img
-                      src={cropImageUrl}
-                      alt=""
-                      draggable={false}
-                      style={{
-                        width: `${100 / source.w}%`,
-                        height: `${100 / source.h}%`,
-                        left: `${-(source.x / source.w) * 100}%`,
-                        top: `${-(source.y / source.h) * 100}%`,
-                      }}
-                    />
-                  </span>
-                  <span className="photo-object-handle">{item.label}</span>
+                  {refined && cutoutUrl ? (
+                    <span className="photo-object-cutout" aria-hidden="true">
+                      <img src={cutoutUrl} alt="" draggable={false} />
+                    </span>
+                  ) : (
+                    <span className="photo-object-crop" aria-hidden="true">
+                      <img
+                        src={sourceImageUrl}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          width: `${100 / source.w}%`,
+                          height: `${100 / source.h}%`,
+                          left: `${-(source.x / source.w) * 100}%`,
+                          top: `${-(source.y / source.h) * 100}%`,
+                        }}
+                      />
+                    </span>
+                  )}
+                  <span className="photo-object-handle" aria-hidden="true" />
                 </button>
               </div>
             );
           })}
+
+          {refined && (localScene.occluders ?? [])
+            .filter((occluder) => occluder.hidesSurfaceIds.some((surfaceId) => hiddenSurfaceIds.has(surfaceId)))
+            .map((occluder) => (
+              <div key={occluder.id} className="photo-occluder-layer" style={{ clipPath: polygonClip(occluder.polygon) }} aria-hidden="true">
+                <img src={backgroundImageUrl} alt="" draggable={false} />
+              </div>
+            ))}
 
           {preview && draggingId && (
             <div className={`photo-physics-hud ${preview.state}`}>
@@ -243,7 +279,7 @@ export default function PhotoWorkspace({
       </div>
 
       <div className="photo-interaction-footer">
-        <span><b>Direct manipulation</b> · touch the plant and drag</span>
+        <span><b>{refined ? 'Refined manipulation' : 'Direct manipulation'}</b> · touch the plant and drag</span>
         <span>{selected?.supportSurfaceId ? `Supported by ${localScene.surfaces.find((surface) => surface.id === selected.supportSurfaceId)?.label ?? selected.supportSurfaceId}` : 'Unsupported'}</span>
       </div>
     </div>
