@@ -32,6 +32,17 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - The manipulation canvas suppresses Safari/native image callouts and browser gesture ownership. NestMetric owns pinch, pan, object drag, and double-tap inside that canvas.
 - A compact `− / scale / +` zoom control remains available on the photo surface as a reliable fallback for touch-device gesture inconsistencies. Reset appears while zoomed. These controls must remain secondary to the photograph while meeting 44px touch-target requirements.
 
+## Object selection and drag ownership
+- The visible photographed object and its interaction responder are separate layers. Visual cutouts/crops do not own hit-testing directly.
+- Every movable object gets a dedicated transparent responder centered over its photo-space footprint. That responder claims a one-finger touch immediately and selects the object on pointer-down.
+- The canvas must not inspect DOM ancestry or infer which object the user intended to touch. Canvas one-finger handling is reserved for empty-space navigation only.
+- The responder maintains a minimum 44px **screen-space** hit target. When zoomed, the responder's CSS-space minimum shrinks inversely with viewport scale so the on-screen hit region does not become oversized.
+- Object movement uses the object's recorded starting box plus pointer delta from the gesture start. Do not continuously recenter the object under the finger and do not accumulate frame-to-frame positional drift.
+- A tap selects without writing. A drag updates only transient/local scene state while moving, then commits at most once on release.
+- Invalid release reverts to the recorded starting state. Unsupported release delegates to NestMetric's deterministic gravity resolver. Object-responder ergonomics must never bypass collision or support rules.
+- If two-finger viewport navigation begins while an object responder is active, the object move is cancelled and viewport ownership wins without persisting the cancelled object move.
+- Selection feedback remains subtle and photo-native. Do not add persistent object-name pills, drag handles, or CAD-style bounding boxes merely because the responder itself is rectangular or expanded for touch accessibility.
+
 ## Direct manipulation in Photo
 - Direct manipulation happens on the original calibrated room photo. Generated visual proposals remain view-only unless they receive their own explicit calibration contract later.
 - The live drag representation must preserve the photographed object's original pixels. AI-generated object recreations are not acceptable as the primary manipulation layer because they can change identity, texture, leaves, edges, lighting, or shape.
@@ -39,7 +50,7 @@ Calm functional-photo aesthetic: warm neutral application chrome, restrained for
 - AI may prepare only the hidden-surface reconstruction needed behind the object. Whole-room regeneration is not an acceptable background-preparation strategy for direct manipulation.
 - The localized background-preparation mask should be slightly expanded/feathered around the object edge to remove source-edge remnants while preserving the rest of the photograph unchanged in content.
 - The original source image remains immutable. Removing an object from its source location is represented by a separate background plate, never by destructive editing of the source asset.
-- Picking up an object preserves the exact touch/grab offset. The object follows the finger continuously without snapping while moving.
+- Picking up an object preserves the exact touch/grab relationship. The object follows the finger continuously without snapping while moving.
 - On touch devices, the photo manipulation surface suppresses native image callouts/context menus so long-press/drag is owned by NestMetric rather than Safari/OS image actions.
 - Support, collision, and gravity feedback may appear only while relevant. Support surfaces and blocker regions are interaction diagnostics, not permanent visual overlays.
 - A selected object uses only a restrained edge/halo effect derived from the object silhouette. Persistent object-name pills, rectangular selection boxes, corner handles, or CAD-like controls are not part of the normal photo state.
