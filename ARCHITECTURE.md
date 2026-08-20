@@ -34,6 +34,16 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 - Scene position changes persist only to the source photo's scene metadata and do not mutate Room Model measurements, object coordinates, constraints, or Build readiness.
 - Generated visual proposals are view-only for direct manipulation. Manipulation is anchored to the original calibrated source photo; proposals may be used for visual comparison but are not assumed to be pixel-identical scene geometry.
 
+### Photo viewport interaction layer
+- Zoom and pan are a view transform above the normalized photo-scene model. They never rewrite support surfaces, object coordinates, collision footprints, occluders, or persisted scene positions.
+- The viewport contract is `{scale, tx, ty}` with a supported scale range of `1x..5x`. Translation is clamped so the transformed photograph continues to cover the visible canvas; returning to `1x` recenters the view.
+- Pointer coordinates are converted through the inverse viewport transform before they enter object drag, support, collision, or gravity logic. This keeps manipulation physically consistent regardless of zoom or pan.
+- Gesture ownership is deterministic: two active pointers always own pinch zoom/pan; one pointer beginning on a movable object owns object manipulation; one pointer on empty photo space pans only when zoomed; double-tap on empty photo space toggles between `1x` and `2.5x`.
+- If a second pointer appears during object manipulation, the object move is cancelled/reverted and the two-finger viewport gesture takes precedence. A simple object tap does not create a persistence write.
+- Zoom is anchored around the live pinch midpoint or double-tap point so the content under the user's fingers remains spatially stable while scaling.
+- Small photographed objects may expose a minimum 44px invisible interaction target without changing their visible segmentation silhouette, scene footprint, collision geometry, or rendered size.
+- Native image callouts and browser gesture ownership remain suppressed on the manipulation canvas so iOS/Safari does not steal pinch, pan, or drag interactions.
+
 ### V3 segmentation-first compositing
 - The live draggable object is derived from the immutable source photo's actual pixels. AI does not recreate the object for live manipulation.
 - Each calibrated movable item may contain one or more `sourceMasks`, normalized to its `sourceBbox`. Multiple masks are composited as a union so separated foliage/pot regions can preserve exact photographed pixels while excluding unrelated room pixels.
