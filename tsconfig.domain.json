@@ -13,6 +13,7 @@
     "src/lib/room-model/types.ts",
     "src/lib/room-model/geometry.ts",
     "src/lib/room-model/verification.ts",
+    "src/lib/room-model/history.ts",
     "src/lib/planning/deterministic.ts"
   ]
 }
