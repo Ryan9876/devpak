@@ -1,9 +1,9 @@
 import type { PhotoScene } from './types';
 
 export const bedroomDresserSceneV1: PhotoScene = {
-  version: 1,
+  version: 2,
   coordinateSpace: 'normalized_image',
-  calibration: 'manual_v1',
+  calibration: 'manual_v3',
   surfaces: [
     {
       id: 'dresser-top',
@@ -56,6 +56,32 @@ export const bedroomDresserSceneV1: PhotoScene = {
       kind: 'plant',
       sourceBbox: { x: 0.100, y: 0.455, w: 0.205, h: 0.150 },
       bbox: { x: 0.100, y: 0.455, w: 0.205, h: 0.150 },
+      segmentation: 'manual_polygon_v3',
+      sourceMasks: [
+        [
+          { x: 0.03, y: 0.48 }, { x: 0.13, y: 0.36 }, { x: 0.21, y: 0.31 },
+          { x: 0.16, y: 0.22 }, { x: 0.31, y: 0.25 }, { x: 0.36, y: 0.13 },
+          { x: 0.47, y: 0.20 }, { x: 0.52, y: 0.05 }, { x: 0.59, y: 0.20 },
+          { x: 0.72, y: 0.13 }, { x: 0.69, y: 0.28 }, { x: 0.86, y: 0.24 },
+          { x: 0.80, y: 0.38 }, { x: 0.97, y: 0.43 }, { x: 0.82, y: 0.52 },
+          { x: 0.88, y: 0.62 }, { x: 0.68, y: 0.59 }, { x: 0.61, y: 0.70 },
+          { x: 0.42, y: 0.67 }, { x: 0.34, y: 0.59 }, { x: 0.18, y: 0.62 },
+          { x: 0.22, y: 0.53 }, { x: 0.07, y: 0.57 }
+        ],
+        [
+          { x: 0.31, y: 0.55 }, { x: 0.43, y: 0.51 }, { x: 0.62, y: 0.52 },
+          { x: 0.70, y: 0.60 }, { x: 0.68, y: 0.94 }, { x: 0.61, y: 0.99 },
+          { x: 0.39, y: 0.99 }, { x: 0.33, y: 0.92 }
+        ],
+        [
+          { x: 0.00, y: 0.43 }, { x: 0.12, y: 0.37 }, { x: 0.25, y: 0.40 },
+          { x: 0.31, y: 0.48 }, { x: 0.20, y: 0.54 }, { x: 0.06, y: 0.53 }
+        ],
+        [
+          { x: 0.66, y: 0.35 }, { x: 0.82, y: 0.31 }, { x: 1.00, y: 0.39 },
+          { x: 0.96, y: 0.51 }, { x: 0.79, y: 0.50 }, { x: 0.68, y: 0.57 }
+        ]
+      ],
       supportSurfaceId: 'dresser-top',
       footprint: { width: 0.068, height: 0.026 },
       draggable: true,
