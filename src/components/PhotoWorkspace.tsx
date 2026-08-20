@@ -4,6 +4,8 @@ import { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { evaluatePlacement, resolveDrop } from '@/lib/photo/placement';
 import {
   DOUBLE_TAP_PHOTO_SCALE,
+  MAX_PHOTO_SCALE,
+  MIN_PHOTO_SCALE,
   clampPhotoViewport,
   screenToPhotoNormalized,
   zoomPhotoViewportAround,
@@ -46,6 +48,13 @@ type GestureSession =
       imageAnchorX: number;
       imageAnchorY: number;
     };
+
+type NativePinchSession = {
+  startDistance: number;
+  startScale: number;
+  imageAnchorX: number;
+  imageAnchorY: number;
+};
 
 function clampBox(box: NormalizedBox): NormalizedBox {
   return {
@@ -96,6 +105,10 @@ function midpoint(a: ScreenPoint, b: ScreenPoint): ScreenPoint {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
+function touchPoint(touch: Touch): ScreenPoint {
+  return { x: touch.clientX, y: touch.clientY };
+}
+
 export default function PhotoWorkspace({
   backgroundImageUrl,
   sourceImageUrl,
@@ -119,6 +132,8 @@ export default function PhotoWorkspace({
   const activePointersRef = useRef(new Map<number, ScreenPoint>());
   const gestureRef = useRef<GestureSession | null>(null);
   const lastTapRef = useRef<{ at: number; point: ScreenPoint } | null>(null);
+  const nativePinchRef = useRef<NativePinchSession | null>(null);
+  const nativePinchActiveRef = useRef(false);
 
   useEffect(() => {
     viewportRef.current = viewport;
@@ -171,6 +186,22 @@ export default function PhotoWorkspace({
     setViewport(clamped);
   }
 
+  function zoomAroundCenter(nextScale: number) {
+    const rect = canvasRect();
+    if (!rect) return;
+    const next = zoomPhotoViewportAround(
+      viewportRef.current,
+      nextScale,
+      rect.width,
+      rect.height,
+      rect.width / 2,
+      rect.height / 2,
+    );
+    viewportRef.current = next;
+    setViewport(next);
+    onStatus?.(next.scale > 1 ? `${next.scale.toFixed(1)}× zoom · drag empty space to pan.` : 'Photo reset to 1×.');
+  }
+
   function resetViewport() {
     viewportRef.current = { scale: 1, tx: 0, ty: 0 };
     setViewport({ scale: 1, tx: 0, ty: 0 });
@@ -178,7 +209,7 @@ export default function PhotoWorkspace({
   }
 
   function beginObjectDrag(pointerId: number, point: ScreenPoint, item: PhotoSceneItem) {
-    if (disabled || item.fixed || !item.draggable) return false;
+    if (disabled || item.fixed || !item.draggable || nativePinchActiveRef.current) return false;
     const pointer = normalizedClient(point.x, point.y);
     if (!pointer) return false;
     setSelectedId(item.id);
@@ -200,7 +231,7 @@ export default function PhotoWorkspace({
 
   function moveObject(point: ScreenPoint) {
     const drag = dragRef.current;
-    if (!drag || disabled) return;
+    if (!drag || disabled || nativePinchActiveRef.current) return;
     const pointer = normalizedClient(point.x, point.y);
     if (!pointer) return;
     const current = sceneRef.current.items.find((item) => item.id === drag.itemId);
@@ -265,7 +296,8 @@ export default function PhotoWorkspace({
     if (message) onStatus?.(message);
   }
 
-  function beginPinch() {
+  function beginPointerPinch() {
+    if (nativePinchActiveRef.current) return;
     const entries = Array.from(activePointersRef.current.entries()).slice(0, 2);
     if (entries.length < 2) return;
     cancelObjectDrag();
@@ -287,7 +319,7 @@ export default function PhotoWorkspace({
     onStatus?.('Pinch to zoom · move two fingers to reposition the photo.');
   }
 
-  function updatePinch(gesture: Extract<GestureSession, { kind: 'pinch' }>) {
+  function updatePointerPinch(gesture: Extract<GestureSession, { kind: 'pinch' }>) {
     const a = activePointersRef.current.get(gesture.pointerIds[0]);
     const b = activePointersRef.current.get(gesture.pointerIds[1]);
     const rect = canvasRect();
@@ -302,6 +334,75 @@ export default function PhotoWorkspace({
       ty: localMidY - gesture.imageAnchorY * nextScale,
     });
   }
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function beginNativePinch(event: TouchEvent) {
+      if (event.touches.length < 2) return;
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const a = touchPoint(event.touches[0]);
+      const b = touchPoint(event.touches[1]);
+      const mid = midpoint(a, b);
+      const current = viewportRef.current;
+      nativePinchActiveRef.current = true;
+      activePointersRef.current.clear();
+      gestureRef.current = null;
+      cancelObjectDrag();
+      nativePinchRef.current = {
+        startDistance: Math.max(1, distance(a, b)),
+        startScale: current.scale,
+        imageAnchorX: (mid.x - rect.left - current.tx) / current.scale,
+        imageAnchorY: (mid.y - rect.top - current.ty) / current.scale,
+      };
+      onStatus?.('Pinch to zoom · lift both fingers when finished.');
+    }
+
+    function moveNativePinch(event: TouchEvent) {
+      const pinch = nativePinchRef.current;
+      if (!pinch || event.touches.length < 2) return;
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const a = touchPoint(event.touches[0]);
+      const b = touchPoint(event.touches[1]);
+      const mid = midpoint(a, b);
+      const nextScale = pinch.startScale * (distance(a, b) / pinch.startDistance);
+      const next = clampPhotoViewport({
+        scale: nextScale,
+        tx: mid.x - rect.left - pinch.imageAnchorX * nextScale,
+        ty: mid.y - rect.top - pinch.imageAnchorY * nextScale,
+      }, rect.width, rect.height);
+      viewportRef.current = next;
+      setViewport(next);
+    }
+
+    function endNativePinch(event: TouchEvent) {
+      if (!nativePinchRef.current) return;
+      if (event.touches.length >= 2) return;
+      if (event.cancelable) event.preventDefault();
+      nativePinchRef.current = null;
+      nativePinchActiveRef.current = false;
+      activePointersRef.current.clear();
+      gestureRef.current = null;
+      const current = viewportRef.current;
+      onStatus?.(current.scale > 1.001
+        ? `${current.scale.toFixed(1)}× zoom · drag empty space to pan or touch an object to move it.`
+        : 'Photo reset to 1×.');
+    }
+
+    canvas.addEventListener('touchstart', beginNativePinch, { passive: false });
+    canvas.addEventListener('touchmove', moveNativePinch, { passive: false });
+    canvas.addEventListener('touchend', endNativePinch, { passive: false });
+    canvas.addEventListener('touchcancel', endNativePinch, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', beginNativePinch);
+      canvas.removeEventListener('touchmove', moveNativePinch);
+      canvas.removeEventListener('touchend', endNativePinch);
+      canvas.removeEventListener('touchcancel', endNativePinch);
+    };
+  }, []);
 
   function processEmptyTap(point: ScreenPoint) {
     const now = performance.now();
@@ -329,17 +430,22 @@ export default function PhotoWorkspace({
   }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (nativePinchActiveRef.current) {
+      event.preventDefault();
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-photo-viewport-control]')) return;
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Pointer capture is best effort on mobile Safari. */ }
 
     if (activePointersRef.current.size >= 2) {
-      beginPinch();
+      beginPointerPinch();
       return;
     }
 
-    const target = event.target as HTMLElement;
     const itemElement = target.closest<HTMLElement>('[data-photo-item-id]');
     const itemId = itemElement?.dataset.photoItemId;
     const item = itemId ? sceneRef.current.items.find((candidate) => candidate.id === itemId) : null;
@@ -360,7 +466,7 @@ export default function PhotoWorkspace({
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!activePointersRef.current.has(event.pointerId)) return;
+    if (nativePinchActiveRef.current || !activePointersRef.current.has(event.pointerId)) return;
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
@@ -368,7 +474,7 @@ export default function PhotoWorkspace({
     if (!gesture) return;
 
     if (gesture.kind === 'pinch') {
-      updatePinch(gesture);
+      updatePointerPinch(gesture);
       return;
     }
     if (gesture.kind === 'object' && gesture.pointerId === event.pointerId) {
@@ -379,8 +485,6 @@ export default function PhotoWorkspace({
       const dx = point.x - gesture.start.x;
       const dy = point.y - gesture.start.y;
       if (Math.hypot(dx, dy) > 5) gesture.moved = true;
-      const rect = canvasRect();
-      if (!rect) return;
       updateViewport({
         ...gesture.startViewport,
         tx: gesture.startViewport.tx + dx,
@@ -393,7 +497,7 @@ export default function PhotoWorkspace({
     }
   }
 
-  function transitionAfterPinch() {
+  function transitionAfterPointerPinch() {
     const remaining = Array.from(activePointersRef.current.entries());
     if (remaining.length === 1 && viewportRef.current.scale > 1.001) {
       const [pointerId, point] = remaining[0];
@@ -410,6 +514,10 @@ export default function PhotoWorkspace({
   }
 
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (nativePinchActiveRef.current) {
+      activePointersRef.current.delete(event.pointerId);
+      return;
+    }
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
     const gesture = gestureRef.current;
@@ -424,7 +532,7 @@ export default function PhotoWorkspace({
 
     activePointersRef.current.delete(event.pointerId);
     if (gesture?.kind === 'pinch') {
-      transitionAfterPinch();
+      transitionAfterPointerPinch();
       return;
     }
 
@@ -441,12 +549,15 @@ export default function PhotoWorkspace({
 
   function handlePointerCancel(event: PointerEvent<HTMLDivElement>) {
     activePointersRef.current.delete(event.pointerId);
+    if (nativePinchActiveRef.current) return;
     if (dragRef.current?.pointerId === event.pointerId) cancelObjectDrag('Move cancelled.');
-    if (gestureRef.current?.kind === 'pinch') transitionAfterPinch();
+    if (gestureRef.current?.kind === 'pinch') transitionAfterPointerPinch();
     else gestureRef.current = null;
   }
 
   const viewportTransform = `translate3d(${viewport.tx}px, ${viewport.ty}px, 0) scale(${viewport.scale})`;
+  const zoomOutDisabled = viewport.scale <= MIN_PHOTO_SCALE + 0.001;
+  const zoomInDisabled = viewport.scale >= MAX_PHOTO_SCALE - 0.001;
 
   return (
     <div className={`photo-interaction-stage${refined ? ' refined' : ' fallback'}`}>
@@ -533,18 +644,41 @@ export default function PhotoWorkspace({
             </div>
           )}
 
-          {viewport.scale > 1.001 && (
-            <button type="button" className="photo-viewport-reset" onClick={(event) => { event.stopPropagation(); resetViewport(); }}>
-              {viewport.scale.toFixed(1)}× · Reset
-            </button>
-          )}
+          <div className="photo-viewport-controls" data-photo-viewport-control="true" role="group" aria-label="Photo zoom controls">
+            <button
+              type="button"
+              data-photo-viewport-control="true"
+              aria-label="Zoom out"
+              disabled={zoomOutDisabled}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); zoomAroundCenter(viewportRef.current.scale - 0.5); }}
+            >−</button>
+            <span aria-live="polite">{viewport.scale.toFixed(1)}×</span>
+            <button
+              type="button"
+              data-photo-viewport-control="true"
+              aria-label="Zoom in"
+              disabled={zoomInDisabled}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); zoomAroundCenter(viewportRef.current.scale + 0.5); }}
+            >+</button>
+            {viewport.scale > 1.001 && (
+              <button
+                type="button"
+                className="reset"
+                data-photo-viewport-control="true"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); resetViewport(); }}
+              >Reset</button>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="photo-interaction-footer">
         <span>
           <b>{refined ? 'Refined manipulation' : 'Direct manipulation'}</b>
-          {viewport.scale > 1.001 ? ' · drag empty space to pan · pinch to zoom' : ' · pinch to zoom · touch the plant to move'}
+          {viewport.scale > 1.001 ? ' · drag empty space to pan · pinch or use +/− to zoom' : ' · pinch or use + to zoom · touch the plant to move'}
         </span>
         <span>{selected?.supportSurfaceId ? `Supported by ${localScene.surfaces.find((surface) => surface.id === selected.supportSurfaceId)?.label ?? selected.supportSurfaceId}` : 'Unsupported'}</span>
       </div>
