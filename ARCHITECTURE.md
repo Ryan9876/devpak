@@ -37,14 +37,17 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 ### V3 segmentation-first compositing
 - The live draggable object is derived from the immutable source photo's actual pixels. AI does not recreate the object for live manipulation.
 - Each calibrated movable item may contain one or more `sourceMasks`, normalized to its `sourceBbox`. Multiple masks are composited as a union so separated foliage/pot regions can preserve exact photographed pixels while excluding unrelated room pixels.
-- The authenticated `/api/ai/photo-scene-assets` preparation route uses server-side `sharp` to crop the original source image and apply the calibrated alpha masks. The resulting transparent PNG is stored privately with `captureMethod: scene_object_cutout` and `renderMode: exact_source_mask_v3`.
+- The authenticated `/api/ai/photo-scene-assets` preparation route uses server-side `sharp` to auto-orient the original source photo, crop the exact source-pixel region, and apply the calibrated alpha masks. The resulting transparent PNG is stored privately with `captureMethod: scene_object_cutout` and `renderMode: exact_source_mask_v3`.
 - Exact-pixel cutout generation is deterministic and local to the application runtime. It does not call an image model and therefore cannot redesign the plant, alter leaves, change texture, or substitute a similar object.
-- A clean background plate remains a separate private derivative tied to the same source photo. If a valid background plate already exists it is reused; otherwise GPT Image 2 performs a narrow inpainting operation that removes only the calibrated movable object and reconstructs the hidden room surface.
+- The clean background plate uses **localized masked inpainting**, not whole-frame regeneration. The server extracts a padded crop around the calibrated source object, asks GPT Image 2 to reconstruct only the hidden local surface, resizes that result back to the crop dimensions, applies an expanded/feathered version of the calibrated object mask, and composites only those masked pixels over the auto-oriented source image.
+- Pixels outside the calibrated object-mask region remain sourced from the original photograph. This prevents whole-room semantic drift such as added baskets, moved furniture, restyled surfaces, or changed lighting outside the plant location.
+- Background derivatives are stored with `captureMethod: scene_background_plate` and `renderMode: localized_mask_inpaint_v3`; older whole-frame background plates are not valid reusable v3 backgrounds.
 - Scene preparation is authenticated, owner-scoped, and idempotent. Existing v3 derivatives are reused rather than regenerated on page load or pointer movement.
-- Dragging after preparation is browser-side compositing: clean background plate + exact-pixel transparent object + deterministic contact shadow + foreground occlusion masks. No image generation occurs per pointer movement.
+- Dragging after preparation is browser-side compositing: localized background plate + exact-pixel transparent object + deterministic contact shadow + foreground occlusion masks. No image generation occurs per pointer movement.
 - Contact shadows are visual grounding derived from the item's support footprint and support kind; they do not alter placement validity.
 - Foreground occluders are normalized image-space masks that redraw portions of the background plate above an object when that object is on a surface visually behind the occluder. The current bedroom calibration uses the bed foreground to occlude floor-level placement.
 - Selection chrome is silhouette-oriented and intentionally restrained. Rectangular handles/selection boxes are excluded from the normal photo interaction state.
+- Native browser image callouts/context menus are suppressed in the manipulation surface so touch-and-drag remains application interaction rather than invoking OS image actions.
 - The v1 crop renderer remains only as a temporary fallback when an exact-pixel cutout has not yet been prepared. It is not the target production renderer.
 
 ### Canonical Room Model
@@ -57,7 +60,7 @@ NestMetric is a functional photo-augmentation application backed by one canonica
 ### Safety / feasibility boundary
 - Deterministic geometry validation is authoritative for bounds, clearances, openings, fixed-obstacle collisions, and snapping.
 - Deterministic photo-scene support/collision/gravity rules are authoritative for direct photo manipulation; AI imagery does not override them.
-- AI may generate background plates and visual proposals, but it does not decide whether a photo-space placement is supported or collision-free and does not recreate the live draggable object in v3.
+- AI may generate localized hidden-surface reconstruction and whole-photo visual proposals, but it does not decide whether a photo-space placement is supported or collision-free and does not recreate the live draggable object in v3.
 - Photorealistic appearance is not evidence of dimensional accuracy.
 - Build plans remain gated until required dimensional evidence is verified or explicitly corrected by the user.
 
